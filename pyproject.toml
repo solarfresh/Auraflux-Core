@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auraflux-core"
+version = "0.1.0"
+authors = [
+    { name = "Scott Huang", email = "shangyuhuang@gmail.com" },
+]
+description = "The core AI agent package for the Auraflux project, built to solve AI knowledge fragmentation."
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "ag2>=0.9.9",
+    "pydantic>=2.0",
+    "neo4j>=5.0",
+    "psycopg2-binary>=2.9",
+]
+
+[project.urls]
+Homepage = "https://github.com/solarfresh/Auraflux-Core"
+Issues = "https://github.com/solarfresh/Auraflux-Core/issues"
