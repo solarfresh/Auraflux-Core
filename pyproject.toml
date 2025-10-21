@@ -21,7 +21,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
+    "httpx==0.28.1",
+    "playwright==1.55.0",
     "pydantic>=2.0",
+    "pydantic-settings==2.11.0",
     "psycopg2-binary>=2.9",
 ]
 
