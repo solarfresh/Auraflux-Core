@@ -63,7 +63,8 @@ class GoogleSearchTool(BaseTool):
                 processed_results.append({
                     "title": result.get("title"),
                     "url": result.get("link"),
-                    "snippet": result.get("snippet")
+                    "snippet": result.get("snippet"),
+                    "source": result.get("displayLink")
                 })
 
             return json.dumps(processed_results, ensure_ascii=False)
