@@ -13,7 +13,7 @@ from auraflux_core.core.tools.base_tool import BaseTool
 
 class BaseAgent(ABC):
     """
-    Base class for all agents in the Twinrad system, using AutoGen's ConversableAgent as the foundation.
+    Base class for all agents in the Auraflux system, using AutoGen's ConversableAgent as the foundation.
 
     This class provides a shared logging setup and a consistent initialization pattern.
     The agent's specific behavior should be defined in subclasses by implementing their

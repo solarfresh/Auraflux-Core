@@ -20,7 +20,7 @@ def find_project_root(start_path: Path) -> Path:
 
 def get_core_env_files() -> list[Path]:
     """
-    Get list of environment files for core TwinRAD settings.
+    Get list of environment files for core Auraflux settings.
     Returns only existing files to avoid warnings.
     """
     root_env = find_project_root(Path(__file__)) / ".env"
@@ -31,10 +31,10 @@ def get_core_env_files() -> list[Path]:
 
     return env_files
 
-class TwinRADSettings(BaseSettings):
+class AurafluxSettings(BaseSettings):
     """
-    Core TwinRAD settings for the multi-agent red teaming framework.
-    This class handles configuration for the core twinrad package only.
+    Core Auraflux settings for the multi-agent red teaming framework.
+    This class handles configuration for the core auraflux package only.
     Service-specific settings (server, dashboard) are handled separately.
     """
     model_config = SettingsConfigDict(
@@ -43,7 +43,7 @@ class TwinRADSettings(BaseSettings):
         extra="ignore"
     )
 
-    # Core TwinRAD settings
+    # Core Auraflux settings
     log_level: str = "INFO"
 
     # LLM API Keys for red team agents
@@ -62,4 +62,4 @@ class TwinRADSettings(BaseSettings):
     google_search_engine_base_url: str = "https://customsearch.googleapis.com/customsearch/v1"
 
 # Create an instance of the Settings class
-settings = TwinRADSettings()
+settings = AurafluxSettings()

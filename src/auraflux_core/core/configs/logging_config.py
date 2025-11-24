@@ -2,14 +2,14 @@ import logging
 import sys
 from .settings import settings
 
-def setup_logging(name='twinrad'):
+def setup_logging(name='auraflux') -> logging.Logger:
     """
     Sets up the application's logging configuration.
 
     The log level is set based on the `settings.log_level` environment variable.
     If not specified, it defaults to 'INFO'.
 
-    @param name: The name of the logger. Defaults to 'twinrad'.
+    @param name: The name of the logger. Defaults to 'auraflux'.
     @return: Configured logger instance.
     """
     # Create the logger instance

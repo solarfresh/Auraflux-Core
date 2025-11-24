@@ -7,7 +7,7 @@ from auraflux_core.core.schemas.tools import ToolConfig
 
 class BaseTool(ABC):
     """
-    Abstract base class for all tools in the Twinrad system.
+    Abstract base class for all tools in the Auraflux system.
 
     This class defines the required interface for any tool to be
     integrated with an agent.

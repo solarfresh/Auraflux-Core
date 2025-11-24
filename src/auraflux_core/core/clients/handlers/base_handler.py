@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
-from twinrad.core.configs.logging_config import setup_logging
-from twinrad.core.schemas.clients import LLMRequest, LLMResponse, ModelConfig
+from auraflux_core.core.configs.logging_config import setup_logging
+from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
+                                                ModelConfig)
 
 
 class BaseHandler(ABC):

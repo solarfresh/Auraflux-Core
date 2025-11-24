@@ -4,8 +4,9 @@ import openai
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion import ChatCompletion
 
-from twinrad.core.clients.handlers.base_handler import BaseHandler
-from twinrad.core.schemas.clients import LLMRequest, LLMResponse, ModelConfig
+from auraflux_core.core.clients.handlers.base_handler import BaseHandler
+from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
+                                                ModelConfig)
 
 
 class OpenAIHandler(BaseHandler):
