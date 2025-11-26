@@ -1,6 +1,11 @@
 import logging
 import sys
+from logging import Logger
+from typing import Dict
+
 from .settings import settings
+
+logger_map: Dict[str, Logger] = {}
 
 def setup_logging(name='auraflux') -> logging.Logger:
     """
@@ -12,6 +17,9 @@ def setup_logging(name='auraflux') -> logging.Logger:
     @param name: The name of the logger. Defaults to 'auraflux'.
     @return: Configured logger instance.
     """
+    if name in logger_map:
+        return logger_map[name]
+
     # Create the logger instance
     logger = logging.getLogger(name)
 
@@ -33,5 +41,7 @@ def setup_logging(name='auraflux') -> logging.Logger:
 
     # Prevent duplicate log messages in some environments
     logger.propagate = False
+
+    logger_map[name] = logger
 
     return logger

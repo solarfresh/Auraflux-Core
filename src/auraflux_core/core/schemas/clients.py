@@ -63,3 +63,6 @@ class ModelConfig(BaseModel):
 class ClientConfig(BaseModel):
     """The root configuration for the client module."""
     models: List[ModelConfig] = Field(default_factory=list)
+    initialize_mode: Literal['create_task', 'run_forever'] = 'create_task'
+    timeout_seconds: NonNegativeInt = 300
+    sleep_interval_seconds: float = 0.1
