@@ -71,7 +71,7 @@ class BaseAgent(ABC):
 
             self.logger.debug(f"Sending request to LLM: {request}")
             response: LLMResponse = await self.client_manager.generate(request)
-            self.logger.info(f"Received response from LLM: {response}")
+            self.logger.debug(f"Received response from LLM: {response}")
 
             output_string = self.postprocess_llm_output(response.text)
 
