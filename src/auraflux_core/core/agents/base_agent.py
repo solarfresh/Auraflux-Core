@@ -13,15 +13,13 @@ from auraflux_core.core.tools.base_tool import BaseTool
 
 class BaseAgent(ABC):
     """
-    Base class for all agents in the Twinrad system, using AutoGen's ConversableAgent as the foundation.
+    Base class for all agents in the Auraflux system, using AutoGen's ConversableAgent as the foundation.
 
     This class provides a shared logging setup and a consistent initialization pattern.
     The agent's specific behavior should be defined in subclasses by implementing their
     role within an AutoGen GroupChat or other conversational flows.
     """
-
     def __init__(self, config: AgentConfig, client_manager: ClientManager):
-
         self.config = config
         self.client_manager = client_manager
         self.logger = setup_logging(name=f"[{self.config.name}]")
@@ -73,6 +71,7 @@ class BaseAgent(ABC):
 
             self.logger.debug(f"Sending request to LLM: {request}")
             response: LLMResponse = await self.client_manager.generate(request)
+            self.logger.debug(f"Received response from LLM: {response}")
 
             output_string = self.postprocess_llm_output(response.text)
 

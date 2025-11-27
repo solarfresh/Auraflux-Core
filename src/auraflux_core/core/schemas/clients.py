@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, NonNegativeInt
 
@@ -20,9 +20,13 @@ class LLMRequest(BaseModel):
     max_tokens: NonNegativeInt = 4096
     messages: List[Message]
     model: str
-    system_message: str = 'You are a helpful AI Assistant.'
+    system_message: str = Field(default='You are a helpful AI Assistant.')
     temperature: float = 0.7
     top_p: float = 0.95
+
+    # Non-standard field required by our infrastructure for structured output.
+    # Pydantic allows us to explicitly define this alongside standard params.
+    output_schema: Optional[Dict[str, Any]] = Field(default=None)
 
 
 class LLMResponse(BaseModel):
@@ -59,3 +63,6 @@ class ModelConfig(BaseModel):
 class ClientConfig(BaseModel):
     """The root configuration for the client module."""
     models: List[ModelConfig] = Field(default_factory=list)
+    initialize_mode: Literal['create_task', 'run_forever'] = 'create_task'
+    timeout_seconds: NonNegativeInt = 300
+    sleep_interval_seconds: float = 0.1

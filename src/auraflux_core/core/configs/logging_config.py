@@ -1,17 +1,25 @@
 import logging
 import sys
+from logging import Logger
+from typing import Dict
+
 from .settings import settings
 
-def setup_logging(name='twinrad'):
+logger_map: Dict[str, Logger] = {}
+
+def setup_logging(name='auraflux') -> logging.Logger:
     """
     Sets up the application's logging configuration.
 
     The log level is set based on the `settings.log_level` environment variable.
     If not specified, it defaults to 'INFO'.
 
-    @param name: The name of the logger. Defaults to 'twinrad'.
+    @param name: The name of the logger. Defaults to 'auraflux'.
     @return: Configured logger instance.
     """
+    if name in logger_map:
+        return logger_map[name]
+
     # Create the logger instance
     logger = logging.getLogger(name)
 
@@ -33,5 +41,7 @@ def setup_logging(name='twinrad'):
 
     # Prevent duplicate log messages in some environments
     logger.propagate = False
+
+    logger_map[name] = logger
 
     return logger
