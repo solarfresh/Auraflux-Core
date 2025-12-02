@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
@@ -19,5 +20,11 @@ class BaseHandler(ABC):
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """
         Asynchronously generates a response from a language model.
+        """
+        pass
+
+    def generate_stream(self, request: LLMRequest) -> Any:
+        """
+        Generates a streaming response from a language model.
         """
         pass

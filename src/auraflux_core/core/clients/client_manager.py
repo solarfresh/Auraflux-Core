@@ -2,7 +2,7 @@ import asyncio
 import threading
 from asyncio import Future, Queue, Task
 from concurrent.futures import Future as ThreadFuture
-from typing import Dict
+from typing import Dict, Generator, Any
 import time
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
@@ -228,6 +228,21 @@ class ClientManager:
             raise e
 
         return response
+
+    def generate_stream(self, request: LLMRequest) -> Generator[LLMResponse, Any, Any]:
+        """
+        Generates a streaming response from the appropriate handler.
+        """
+        handler = self.handlers.get(request.model)
+
+        if handler and hasattr(handler, 'generate_stream'):
+            stream_generator = handler.generate_stream(request)
+            for response in stream_generator:
+                yield response
+        else:
+            error_msg = f"Streaming not supported for model '{request.model}' or handler not found."
+            self.logger.error(error_msg)
+            raise NotImplementedError(error_msg)
 
     async def shutdown(self):
         """
