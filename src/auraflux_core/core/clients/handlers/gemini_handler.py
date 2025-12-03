@@ -56,7 +56,7 @@ class GeminiHandler(BaseHandler):
             )
             for msg in request.messages[:-1]
         ]
-        last_message = request.messages[-1]
+        last_message = request.messages[-1].content
 
         chat_session = self.client.chats.create(
             model=request.model,

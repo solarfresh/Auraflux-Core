@@ -116,7 +116,11 @@ class BaseAgent(ABC):
             self.logger.error(f"Error executing tool '{tool_name}': {e}")
             raise e
 
-    def generate_stream(self, messages: List[Message]) -> Generator[Message, Any, Any]:
+    def generate_stream(self, message: Message, chat_history: List[Message]) -> Generator[Message, Any, Any]:
+
+        messages = [deepcopy(msg) for msg in chat_history]
+        messages.append(message)
+
         request = LLMRequest(
             model=self.model,
             messages=messages,
