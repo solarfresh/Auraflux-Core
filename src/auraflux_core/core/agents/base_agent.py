@@ -67,6 +67,8 @@ class BaseAgent(ABC):
                 model=self.model,
                 messages=messages,
                 system_message=self.system_message,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature
             )
 
             self.logger.debug(f"Sending request to LLM: {request}")
