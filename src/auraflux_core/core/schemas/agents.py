@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, NonNegativeInt
 
 
 class AgentConfig(BaseModel):
@@ -12,3 +12,5 @@ class AgentConfig(BaseModel):
     tool_use: Literal['TOOL_USE_DIRECT', 'TOOL_USE_AND_PROCESS', 'NO_TOOL_USE'] = 'NO_TOOL_USE'
     cot_message: str | None = None
     turn_limit: int = 100
+    max_tokens: NonNegativeInt = 4096
+    temperature: float = 0.7

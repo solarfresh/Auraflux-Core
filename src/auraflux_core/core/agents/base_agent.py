@@ -1,7 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Generator
 
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import setup_logging
@@ -67,6 +67,8 @@ class BaseAgent(ABC):
                 model=self.model,
                 messages=messages,
                 system_message=self.system_message,
+                max_tokens=self.config.max_tokens,
+                temperature=self.config.temperature
             )
 
             self.logger.debug(f"Sending request to LLM: {request}")
@@ -115,6 +117,20 @@ class BaseAgent(ABC):
         except Exception as e:
             self.logger.error(f"Error executing tool '{tool_name}': {e}")
             raise e
+
+    def generate_stream(self, message: Message, chat_history: List[Message]) -> Generator[Message, Any, Any]:
+
+        messages = [deepcopy(msg) for msg in chat_history]
+        messages.append(message)
+
+        request = LLMRequest(
+            model=self.model,
+            messages=messages,
+            system_message=self.system_message,
+        )
+        response_stream = self.client_manager.generate_stream(request)
+        for response in response_stream:
+            yield Message(role='assistant', content=response.text, name=self.name)
 
     @abstractmethod
     def get_system_message_map(self) -> Dict[str, str]:

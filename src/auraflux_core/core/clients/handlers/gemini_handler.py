@@ -1,3 +1,5 @@
+from typing import Any, Generator, List
+
 from google import genai
 from google.genai import types
 
@@ -26,19 +28,11 @@ class GeminiHandler(BaseHandler):
                 for msg in request.messages
             ]
 
-            # Extract generation configuration
-            generation_config = types.GenerateContentConfig(
-                system_instruction=request.system_message,
-                max_output_tokens=request.max_tokens,
-                temperature=request.temperature,
-                top_p=request.top_p
-            )
-
             # Call the Gemini API asynchronously
             response = await self.client.aio.models.generate_content(
                 model=request.model,
                 contents=[types.UserContent(parts=messages_payload)],
-                config=generation_config
+                config=self._generate_content_config(request)
             )
 
             # Check for potential errors
@@ -50,3 +44,34 @@ class GeminiHandler(BaseHandler):
 
         except Exception as e:
             raise RuntimeError(f"An error occurred while calling the Gemini API: {e}")
+
+    def generate_stream(self, request: LLMRequest) -> Generator[LLMResponse, Any, Any]:
+        """
+        Generates a streaming response from the Gemini API.
+        """
+        chat_history: List[types.ContentOrDict] = [
+            types.Content(
+                role="user" if msg.role == "user" else "model",
+                parts=[types.Part.from_text(text=msg.content)]
+            )
+            for msg in request.messages[:-1]
+        ]
+        last_message = request.messages[-1].content
+
+        chat_session = self.client.chats.create(
+            model=request.model,
+            config=self._generate_content_config(request),
+            history=chat_history
+        )
+
+        for chunk in chat_session.send_message_stream(last_message):
+            response_text = chunk.text if chunk.text else ""
+            yield LLMResponse(text=response_text)
+
+    def _generate_content_config(self, request: LLMRequest) -> types.GenerateContentConfig:
+        return types.GenerateContentConfig(
+            system_instruction=request.system_message,
+            max_output_tokens=request.max_tokens,
+            temperature=request.temperature,
+            top_p=request.top_p
+        )
