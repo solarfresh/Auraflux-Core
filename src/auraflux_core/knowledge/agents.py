@@ -8,9 +8,7 @@ from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.knowledge import tools
-from auraflux_core.knowledge.schemas import (GoogleSearchAgentConfig,
-                                             GoogleSearchToolConfig,
-                                             ToolConfig)
+from auraflux_core.knowledge.schemas import ToolConfig
 from auraflux_core.knowledge.tools import BaseTool
 
 
@@ -77,37 +75,6 @@ class GraphBuilderAgent(BaseAgent):
             'en': "You are a master at analyzing documents and extracting a complete mind map structure. Your task is to process the following text and create a JSON object that strictly represents a mind map based on the provided schema. Do not include any extra text or conversation. Only output the JSON object.\n\nThe output must contain:\n1. A single \"central_idea\" with a \"label\" and \"type\".\n2. An array of \"main_topics\", each representing a \"MainTopic\" with its own \"label\", \"type\", and \"sub_topics\" array.\n3. Within each \"sub_branch\", an array of \"keywords\", each with its own \"label\" and \"type\".\n4. An optional \"relationships\" array at the end for non-hierarchical connections.\n\nThe available entity types are: \"CentralIdea\", \"MainTopic\", \"SubTopic\", and \"Keyword\".\nThe available relationship types are: \"SUPPORTS\", \"LEADS_TO\", \"RELATED_TO\".\n\nJSON Schema:\n{\n  \"central_idea\": {\n    \"label\": \"string\",\n    \"type\": \"string\"\n  },\n  \"branches\": [\n    {\n      \"label\": \"string\",\n      \"type\": \"string\",\n      \"sub_branches\": [\n        {\n          \"label\": \"string\",\n          \"type\": \"string\",\n          \"keywords\": [\n            {\n              \"label\": \"string\",\n              \"type\": \"string\"\n            }\n          ]\n        }\n      ]\n    }\n  ],\n  \"relationships\": [\n    {\n      \"source\": \"string\",\n      \"target\": \"string\",\n      \"type\": \"string\"\n    }\n  ]\n}",
             'default': "You are a tool-use expert for information validation. You will receive claims and must use your tools to find evidence to support or refute them, and then provide a conclusive verdict."
         }
-
-    def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
-        return {
-            "tool": self.tool.get_name(),
-            "args": {
-                "query": messages[-1].content
-            }
-        }
-
-    def get_tool_map(self) -> Dict[str, BaseTool | None]:
-        return {
-            self.tool.get_name(): self.tool
-        }
-
-
-class SearchAgent(BaseAgent):
-    """
-    Acts as an expert search agent responsible for finding relevant web pages
-    based on a natural language query.
-    """
-    def __init__(self, config: GoogleSearchAgentConfig, client_manager: ClientManager):
-        super().__init__(config, client_manager)
-        self.config.tool_use = 'TOOL_USE_DIRECT'
-        self.tool = tools.GoogleSearchTool(config=GoogleSearchToolConfig(
-            google_search_engine_id=config.google_search_engine_id,
-            google_search_engine_api_key=config.google_search_engine_api_key,
-            google_search_engine_base_url=config.google_search_engine_base_url,
-        ))
-
-    def get_system_message_map(self) -> Dict[str, str]:
-        return {'default': "This function is not adopted."}
 
     def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
         return {
