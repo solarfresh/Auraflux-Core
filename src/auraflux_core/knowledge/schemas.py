@@ -7,16 +7,6 @@ from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.tools import ToolConfig
 
 
-class GoogleSearchToolConfig(ToolConfig):
-    google_search_engine_id: str = ''
-    google_search_engine_api_key: str = ''
-    google_search_engine_base_url: str = "https://customsearch.googleapis.com/customsearch/v1"
-
-
-class GoogleSearchAgentConfig(AgentConfig, GoogleSearchToolConfig):
-    pass
-
-
 class Node(BaseModel):
     label: str
     node_id: str = Field(default_factory=lambda: str(uuid4()))
