@@ -1,5 +1,7 @@
-from pydantic import BaseModel
+from typing import Dict
+
+from pydantic import BaseModel, Field
 
 
 class ToolConfig(BaseModel):
-    pass
+    args: Dict = Field(default={})
