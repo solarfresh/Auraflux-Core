@@ -1,8 +1,10 @@
-from uuid import uuid4
 from enum import Enum
-from typing import Optional, Any, Dict, List
+from typing import Any, Dict, List, Literal, Optional
+from uuid import uuid4
+
 from pydantic import BaseModel, Field
 
+from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.tools import ToolConfig
 
 
@@ -79,9 +81,20 @@ class SpatialLocateToolConfig(ToolConfig):
     """
     Global configuration for the SpatialLocateTool.
     """
+    args: Dict = {
+        'existing_graph_state': {}
+    }
+
     node_clearance: int = Field(default=300, description="Minimum pixel gap")
     max_iterations: int = Field(default=50, description="Physics refinement passes")
     semantic_gravity: SemanticGravity = Field(
         default_factory=SemanticGravity,
         description="Mass constants for different node types"
     )
+
+
+class GraphSynthesistAgentConfig(AgentConfig):
+    tool_use: Literal['TOOL_USE_DIRECT', 'TOOL_USE_AND_PROCESS', 'NO_TOOL_USE'] = 'TOOL_USE_DIRECT'
+    tool_configs: Dict[str, Any] = {
+        'spatial_locate': SpatialLocateToolConfig()
+    }

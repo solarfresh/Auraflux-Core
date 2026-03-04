@@ -1,7 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Dict, List, Generator
+from typing import Any, Dict, List, Generator, Optional
 
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import setup_logging
@@ -28,6 +28,8 @@ class BaseAgent(ABC):
             self.system_message = config.system_message
         else:
             self.system_message = str(self._message_mapper(self.get_system_message_map()))
+
+        self._tool_cache: Optional[Dict[str, Any]] = None
 
     @property
     def model(self) -> str:
@@ -103,6 +105,10 @@ class BaseAgent(ABC):
             tool_call_data  = self.get_tool_call(messages=messages)
 
         tool_name = tool_call_data.get('tool', 'default')
+        tool_call_args = tool_call_data.get('args', {})
+        if self.config.tool_configs:
+            tool_call_args.update(self.config.tool_configs[tool_name].args)
+
         tool = self.get_tool_map()[tool_name]
         self.logger.debug("Retrieved tool for tool call.")
 
@@ -111,8 +117,8 @@ class BaseAgent(ABC):
             return Message(role='assistant', content=f"Error: Tool '{tool_name}' not available.", name=self.name)
 
         try:
-            self.logger.debug(f"Executing tool '{tool_name}' with args: {tool_call_data.get('args', {})}")
-            tool_output = await tool.run(**tool_call_data.get("args", {}))
+            self.logger.debug(f"Executing tool '{tool_name}' with args: {tool_call_args}")
+            tool_output = await tool.run(**tool_call_args)
             return Message(role='assistant', content=tool_output, name=self.name)
         except Exception as e:
             self.logger.error(f"Error executing tool '{tool_name}': {e}")
@@ -140,8 +146,11 @@ class BaseAgent(ABC):
         """
         pass
 
-    def get_tool_map(self) -> Dict[str, BaseTool | None]:
-        return {'default': None}
+    def get_tool_map(self) -> Dict[str, Any]:
+        if not self._tool_cache:
+            raise ValueError(f"No tools configured for {self.name}. Please check the agent configuration.")
+
+        return self._tool_cache
 
     def get_cot_message_map(self) -> Dict[str, str] | None:
         """

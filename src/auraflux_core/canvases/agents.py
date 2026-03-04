@@ -1,7 +1,12 @@
-from typing import Dict, List, Any, Optional
-from auraflux_core.core.schemas.messages import Message
+import json
+from typing import Any, Dict, List
+
 from auraflux_core.core.agents.base_agent import BaseAgent
-from .schemas import ConceptualNode
+from auraflux_core.core.clients.client_manager import ClientManager
+from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
+from auraflux_core.core.schemas.messages import Message
+
+from .schemas import GraphSynthesistAgentConfig
 
 
 class GraphSynthesistAgent(BaseAgent):
@@ -10,18 +15,22 @@ class GraphSynthesistAgent(BaseAgent):
     It evaluates existing research nodes to propose new functional nodes
     (RESOURCE, INSIGHT, QUERY, etc.) and determines their optimal placement.
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._tool_cache: Optional[Dict[str, Any]] = None
+    def get_tool_message_map(self) -> Dict[str, str]:
+        return self.get_system_message_map()
 
     def get_system_message_map(self) -> Dict[str, str]:
-        # Fallback system message; primary logic is managed via backend AgentConfig
         return {
             'default': (
-                "You are the Graph Synthesist. Your goal is to build a coherent "
-                "research map by recommending logical node extensions. "
-                "Analyze the FOCUS and CONCEPT nodes to identify gaps."
+                'You are the Graph Synthesist, a specialized architect of knowledge structures. '
+                'Your goal is to transform a flat list of research data into a coherent, navigable graph. '
+                '\n\nCORE RESPONSIBILITIES:\n'
+                '1. ANALYZE: Evaluate the semantic labels and functional types (CONCEPT, RESOURCE, INSIGHT, QUERY) '
+                'of the provided nodes to identify a central theme.\n'
+                '2. ANCHOR: Designate or suggest one FOCUS node as the gravitational center of the map.\n'
+                '3. LINK: Recommend 0–3 nodes from the provided list to onboard onto the initial canvas. '
+                'For each selected node, assign an "anchor_id" to establish a logical relationship.\n'
+                '4. OPTIMIZE: Prioritize a clean topology. Group related evidence (RESOURCES) near their '
+                'thematic anchors (CONCEPTS) and position exploratory gaps (QUERIES) at the periphery.'
             )
         }
 
@@ -32,15 +41,13 @@ class GraphSynthesistAgent(BaseAgent):
         if self._tool_cache is None:
             # Local import to prevent circular dependencies and heavy startup
             from .tools import SpatialLocateTool
-            self._tool_cache = {
-                # 'locate_node': SpatialLocateTool()
-            }
 
-        return self._tool_cache
+            self._tool_cache = {}
+            for name, config in self.config.tool_configs.items():
+                if name == 'spatial_locate':
+                    self._tool_cache['spatial_locate'] = SpatialLocateTool(config)
 
-    def postprocess_llm_output(self, output_string: str) -> str:
-        """
-        Final cleanup to ensure the WebSocket receives a valid JSON
-        batch of proposed nodes.
-        """
-        return output_string.replace('```json', '').replace('```', '').strip()
+        return super().get_tool_map()
+
+    def postprocess_tool_output(self, output_string: str) -> Any:
+        return json.loads(output_string.replace('```json', '').replace('```', '').strip())
