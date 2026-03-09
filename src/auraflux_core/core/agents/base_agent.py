@@ -96,7 +96,9 @@ class BaseAgent(ABC):
                     messages=messages,
                     system_message=tool_message,
                 )
+                self.logger.debug(f"Sending request to LLM: {request}")
                 response: LLMResponse = await self.client_manager.generate(request)
+                self.logger.debug(f"Received response from LLM: {response}")
                 tool_call_data = self.postprocess_tool_output(response.text)
             except Exception as e:
                 self.logger.error(f"Error processing tool message from LLM: {e}")
