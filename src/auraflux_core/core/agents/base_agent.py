@@ -39,12 +39,12 @@ class BaseAgent(ABC):
     def name(self) -> str:
         return self.config.name
 
-    async def generate(self, messages: List[Message]) -> Message:
+    async def generate(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
         copied_messages = [deepcopy(msg) for msg in messages[-self.config.turn_limit:]]
 
         try:
             if self.config.tool_use == 'TOOL_USE_DIRECT':
-                tool_output_message = await self.generate_tool_message(copied_messages)
+                tool_output_message = await self.generate_tool_message(copied_messages, tool_args_map=tool_args_map)
                 return tool_output_message
 
             if self.config.tool_use == 'TOOL_USE_AND_PROCESS':
@@ -84,7 +84,7 @@ class BaseAgent(ABC):
             self.logger.error(f"Error during LLM generation for agent '{self.name}': {e}")
             raise e
 
-    async def generate_tool_message(self, messages: List[Message]) -> Message:
+    async def generate_tool_message(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
         self.logger.debug("Generating tool message...")
         tool_message = self._message_mapper(self.get_tool_message_map())
         tool_call_data: Dict[str, Any] = {}
@@ -96,7 +96,9 @@ class BaseAgent(ABC):
                     messages=messages,
                     system_message=tool_message,
                 )
+                self.logger.debug(f"Sending request to LLM: {request}")
                 response: LLMResponse = await self.client_manager.generate(request)
+                self.logger.debug(f"Received response from LLM: {response}")
                 tool_call_data = self.postprocess_tool_output(response.text)
             except Exception as e:
                 self.logger.error(f"Error processing tool message from LLM: {e}")
@@ -106,8 +108,8 @@ class BaseAgent(ABC):
 
         tool_name = tool_call_data.get('tool', 'default')
         tool_call_args = tool_call_data.get('args', {})
-        if self.config.tool_configs:
-            tool_call_args.update(self.config.tool_configs[tool_name].args)
+        if tool_args_map is not None:
+            tool_call_args.update(**tool_args_map.get(tool_name, {}))
 
         tool = self.get_tool_map()[tool_name]
         self.logger.debug("Retrieved tool for tool call.")

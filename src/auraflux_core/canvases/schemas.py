@@ -81,10 +81,6 @@ class SpatialLocateToolConfig(ToolConfig):
     """
     Global configuration for the SpatialLocateTool.
     """
-    args: Dict = {
-        'existing_graph_state': {}
-    }
-
     node_clearance: int = Field(default=300, description="Minimum pixel gap")
     max_iterations: int = Field(default=50, description="Physics refinement passes")
     semantic_gravity: SemanticGravity = Field(

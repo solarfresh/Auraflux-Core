@@ -1,12 +1,7 @@
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from auraflux_core.core.agents.base_agent import BaseAgent
-from auraflux_core.core.clients.client_manager import ClientManager
-from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
-from auraflux_core.core.schemas.messages import Message
-
-from .schemas import GraphSynthesistAgentConfig
 
 
 class GraphSynthesistAgent(BaseAgent):
