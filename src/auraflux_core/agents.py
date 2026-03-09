@@ -1,10 +1,10 @@
 from typing import Any, Dict, NamedTuple, Type, Union
 
-from canvases.agents import GraphSynthesistAgent
-from canvases.schemas import (GraphSynthesistAgentConfig,
-                              SpatialLocateToolConfig)
-from core.agents.generic_agent import GenericAgent
-from core.schemas.agents import AgentConfig
+from auraflux_core.canvases.agents import GraphSynthesistAgent
+from auraflux_core.canvases.schemas import (GraphSynthesistAgentConfig,
+                                            SpatialLocateToolConfig)
+from auraflux_core.core.agents.generic_agent import GenericAgent
+from auraflux_core.core.schemas.agents import AgentConfig
 
 Agent = Union[GraphSynthesistAgent, GenericAgent]
 
