@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 import networkx as nx
@@ -8,6 +9,8 @@ from auraflux_core.canvases.schemas import (ConceptualEdge, ConceptualGraph,
                                             ConceptualNodeType, ExpansionNodes,
                                             Position, SpatialLocateToolConfig)
 from auraflux_core.core.tools.base_tool import BaseTool
+
+logger = logging.getLogger(__name__)
 
 
 class SpatialLocateTool(BaseTool):
@@ -37,6 +40,8 @@ class SpatialLocateTool(BaseTool):
             graph_state = ConceptualGraph(**kwargs.get('existing_graph_state', {}))
             existing_node_ids = list(graph_state.nodes.keys())
 
+            logger.debug(f"expansion_data: {kwargs.get('expansion_data', {})}")
+            logger.debug(f"existing_graph_state: {kwargs.get('existing_graph_state', {})}")
             if not expansion.nodes:
                 return json.dumps({"error": "Expansion batch is empty."})
 
@@ -95,7 +100,7 @@ class SpatialLocateTool(BaseTool):
             ]
 
             self.logger.info(f"SpatialLocateTool: Successfully mapped {len(expansion.nodes)} nodes.")
-            return graph_state.model_dump_json(ensure_ascii=False)
+            return graph_state.model_dump_json()
 
         except Exception as e:
             self.logger.error(f"SpatialLocateTool error: {str(e)}")
@@ -171,7 +176,7 @@ class SpatialLocateTool(BaseTool):
             if node.position is None:
                 raise ValueError("All nodes in simulated_pos must have defined positions for offset calculation.")
 
-            if existing_node_ids and node.id in existing_node_ids:
+            if existing_node_ids and (node.id in existing_node_ids):
                 canvas_node = graph_state.nodes[node.id]
                 if canvas_node.position is None:
                     continue
@@ -185,7 +190,7 @@ class SpatialLocateTool(BaseTool):
     def _simulate_semantic_topology(self, expansion: ExpansionNodes) -> ExpansionNodes:
         layout_intent = expansion.layout_intent
         G = self._build_nx_graph(expansion=expansion)
-        prog_engine = layout_intent.lower() if layout_intent else 'twopi'
+        prog_engine = layout_intent.lower() if layout_intent else 'neato'
 
         try:
             pos = nx.nx_agraph.graphviz_layout(
