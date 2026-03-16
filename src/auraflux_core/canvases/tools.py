@@ -1,11 +1,11 @@
 import copy
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
 
-from auraflux_core.canvases.schemas import (ConceptualEdge, ConceptualGraph,
+from auraflux_core.canvases.schemas import (ConceptualEdge, ConceptualGraph, NodeHandle,
                                             ConceptualNodeType, ExpansionNodes,
                                             Position, SpatialLocateToolConfig)
 from auraflux_core.core.tools.base_tool import BaseTool
@@ -23,6 +23,7 @@ class SpatialLocateTool(BaseTool):
         self.node_clearance = config.node_clearance
         self.max_iterations = config.max_iterations
         self.semantic_gravity = config.semantic_gravity
+        self.aspect_ratio = config.aspect_ratio
 
     async def run(self, **kwargs) -> str:
         """
@@ -90,14 +91,19 @@ class SpatialLocateTool(BaseTool):
                 )
                 graph_state.nodes[node.id] = node
 
-            graph_state.edges += [
-                ConceptualEdge(
+            for source, taget, data in G.edges(data=True):
+                source_handle, target_handle = self._calculate_node_handle(
+                    source_position=graph_state.nodes[source].position,
+                    target_position=graph_state.nodes[taget].position
+                )
+                conceptual_edge = ConceptualEdge(
                     source=source,
+                    source_handle=source_handle,
                     target=taget,
+                    target_handle=target_handle,
                     weight=data['weight']
                 )
-                for source, taget, data in G.edges(data=True)
-            ]
+                graph_state.edges.append(conceptual_edge)
 
             self.logger.info(f"SpatialLocateTool: Successfully mapped {len(expansion.nodes)} nodes.")
             return graph_state.model_dump_json()
@@ -161,6 +167,26 @@ class SpatialLocateTool(BaseTool):
 
         return G
 
+    def _calculate_node_handle(
+        self,
+        source_position: Position | None,
+        target_position: Position | None,
+    ) -> Tuple[Optional[NodeHandle], Optional[NodeHandle]]:
+        if source_position is None or target_position is None:
+            return None, None
+
+        reciprocal_slope = (target_position.x - source_position.x) / (target_position.y - source_position.y)
+        if abs(reciprocal_slope) < self.aspect_ratio:
+            if target_position.y > source_position.y:
+                return NodeHandle.SOUTH, NodeHandle.NORTH
+            else:
+                return NodeHandle.NORTH, NodeHandle.SOUTH
+        else:
+            if target_position.x > source_position.x:
+                return NodeHandle.EAST, NodeHandle.WEST
+            else:
+                return NodeHandle.WEST, NodeHandle.EAST
+
     def _calculate_position_offset(
         self,
         graph_state: ConceptualGraph,
@@ -199,7 +225,12 @@ class SpatialLocateTool(BaseTool):
             )
         except Exception as e:
             self.logger.warning(f"Layout engine {prog_engine} failed: {e}")
-            pos = nx.spring_layout(G, k=0.5, iterations=50, scale=None)
+            pos = nx.spring_layout(
+                G,
+                k=self.node_clearance,
+                iterations=self.max_iterations,
+                scale=None
+            )
 
         for node in expansion.nodes:
             if node.id in pos:

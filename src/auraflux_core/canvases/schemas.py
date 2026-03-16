@@ -18,6 +18,13 @@ class ConceptualNodeType(str, Enum):
     GROUP = "GROUP"
 
 
+class NodeHandle(str, Enum):
+    NORTH = 'n'
+    EAST = 'e'
+    WEST = 'w'
+    SOUTH = 's'
+
+
 class Position(BaseModel):
     x: float
     y: float
@@ -39,7 +46,9 @@ class ConceptualEdge(BaseModel):
     Minimal representation of a directed or undirected relationship.
     """
     source: str
+    source_handle: Optional[NodeHandle] = Field(default=None)
     target: str
+    target_handle: Optional[NodeHandle] = Field(default=None)
     weight: Optional[float] = 1.0
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -81,12 +90,13 @@ class SpatialLocateToolConfig(ToolConfig):
     """
     Global configuration for the SpatialLocateTool.
     """
-    node_clearance: int = Field(default=300, description="Minimum pixel gap")
+    node_clearance: int = Field(default=5, description="Minimum pixel gap")
     max_iterations: int = Field(default=50, description="Physics refinement passes")
     semantic_gravity: SemanticGravity = Field(
         default_factory=SemanticGravity,
         description="Mass constants for different node types"
     )
+    aspect_ratio: float = Field(default=1.7, description="aspect ratio for a conceptual node, used to calculate the position of the handle")
 
 
 class GraphSynthesistAgentConfig(AgentConfig):
