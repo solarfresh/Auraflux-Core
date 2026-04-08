@@ -28,3 +28,6 @@ class BaseHandler(ABC):
         Generates a streaming response from a language model.
         """
         pass
+
+    def get_available_models(self):
+        pass

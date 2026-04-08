@@ -48,8 +48,9 @@ class ModelConfig(BaseModel):
     device (str): The device to run the model on, e.g., "cpu", "cuda", "auto".
     dtype (str): The data type for model computations, e.g., "float32", "float16", "bfloat16", "auto".
     """
+    id: str
     name: str
-    mode: Literal["gemini", "generic_api", "openai", "vllm"] = "generic_api"
+    provider_type: Literal["google", "openai", "vllm"] = "google"
     max_model_len: int = 8192
     base_url: Optional[str] = None
     api_key: Optional[str] = None

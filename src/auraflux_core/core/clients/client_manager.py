@@ -38,7 +38,7 @@ class ClientManager:
 
     async def initialize(self):
         """Asynchronously initializes handlers and the dispatcher."""
-        await self._instantiate_handlers()
+        await self.instantiate_handlers()
         if self.initialize_mode == 'create_task':
             self._start_dispatcher()
         elif self.initialize_mode == 'run_forever':
@@ -46,29 +46,32 @@ class ClientManager:
         else:
             raise ValueError(f"Invalid initialize_mode: {self.initialize_mode}")
 
-    async def _instantiate_handlers(self):
+    def get_available_models(self, model_id):
+        return self.handlers[model_id].get_available_models()
+
+    async def instantiate_handlers(self):
         """
         Instantiates all necessary LLM handlers based on the provided configuration.
         """
         for model_config in self.config.models:
             api_key = model_config.api_key
-            if not api_key and model_config.mode not in ('vllm',):
+            if not api_key and model_config.provider_type not in ('vllm',):
                 raise ValueError(f"API key for model '{model_config.name}' is not provided.")
 
             # vLLM is an optional dependency
-            if using_vllm_handler and model_config.mode == "vllm":
+            if using_vllm_handler and model_config.provider_type == "vllm":
                 handler_instance = VLLMHandler(config=model_config)
                 await handler_instance.ainit()
 
-            if model_config.mode == "gemini":
+            if model_config.provider_type == "google":
                 handler_instance = GeminiHandler(config=model_config)
 
-            if model_config.mode == "openai":
+            if model_config.provider_type == "openai":
                 handler_instance = OpenAIHandler(config=model_config)
             # Add other handlers here as they are implemented
 
             if handler_instance:
-                self.handlers[model_config.name] = handler_instance
+                self.handlers[model_config.id] = handler_instance
 
     async def _dispatch_requests(self):
         """Dispatches requests from the queue to the correct handler."""

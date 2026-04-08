@@ -68,6 +68,25 @@ class GeminiHandler(BaseHandler):
             response_text = chunk.text if chunk.text else ""
             yield LLMResponse(text=response_text)
 
+    def get_available_models(self):
+        models = self.client.models.list(config={'page_size': 50})
+
+        supported_models = []
+        for m in models:
+            supported_models.append({
+                "name": m.name,
+                "display_name": m.display_name,
+                "description": m.description,
+                "input_token_limit": m.input_token_limit,
+                "output_token_limit": m.output_token_limit,
+            })
+
+        return {
+            "status": "SUCCESS",
+            "count": len(supported_models),
+            "models": supported_models
+        }
+
     def _generate_content_config(self, request: LLMRequest) -> types.GenerateContentConfig:
         return types.GenerateContentConfig(
             system_instruction=request.system_message,
