@@ -59,14 +59,14 @@ class ClientManager:
                 raise ValueError(f"API key for model '{model_config.name}' is not provided.")
 
             # vLLM is an optional dependency
-            if using_vllm_handler and model_config.provider_type == "vllm":
+            if using_vllm_handler and model_config.provider_type == "VLLM":
                 handler_instance = VLLMHandler(config=model_config)
                 await handler_instance.ainit()
 
-            if model_config.provider_type == "google":
+            if model_config.provider_type == "GOOGLE":
                 handler_instance = GeminiHandler(config=model_config)
 
-            if model_config.provider_type == "openai":
+            if model_config.provider_type == "OPENAI":
                 handler_instance = OpenAIHandler(config=model_config)
             # Add other handlers here as they are implemented
 

@@ -50,7 +50,7 @@ class ModelConfig(BaseModel):
     """
     id: str
     name: str
-    provider_type: Literal["google", "openai", "vllm"] = "google"
+    provider_type: Literal["GOOGLE", "OPENAI", "VLLM"] = "GOOGLE"
     max_model_len: int = 8192
     base_url: Optional[str] = None
     api_key: Optional[str] = None
