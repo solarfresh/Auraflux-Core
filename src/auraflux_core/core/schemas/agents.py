@@ -6,6 +6,7 @@ from pydantic import BaseModel, NonNegativeInt
 
 class AgentConfig(BaseModel):
     name: str
+    provider: str
     model: str
     lang: str = 'en'
     system_message: str | None = None

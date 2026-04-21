@@ -32,6 +32,10 @@ class BaseAgent(ABC):
         self._tool_cache: Optional[Dict[str, Any]] = None
 
     @property
+    def provider(self) -> str:
+        return self.config.provider
+
+    @property
     def model(self) -> str:
         return self.config.model
 
@@ -66,6 +70,7 @@ class BaseAgent(ABC):
                 last_message.content += f"\n\n{cot_to_append}"
 
             request = LLMRequest(
+                provider=self.provider,
                 model=self.model,
                 messages=messages,
                 system_message=self.system_message,
@@ -92,6 +97,7 @@ class BaseAgent(ABC):
         if tool_message is not None:
             try:
                 request = LLMRequest(
+                    provider=self.provider,
                     model=self.model,
                     messages=messages,
                     system_message=tool_message,
@@ -132,6 +138,7 @@ class BaseAgent(ABC):
         messages.append(message)
 
         request = LLMRequest(
+            provider=self.provider,
             model=self.model,
             messages=messages,
             system_message=self.system_message,

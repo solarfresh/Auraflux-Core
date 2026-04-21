@@ -19,6 +19,7 @@ class LLMRequest(BaseModel):
     """
     max_tokens: NonNegativeInt = 4096
     messages: List[Message]
+    provider: str
     model: str
     system_message: str = Field(default='You are a helpful AI Assistant.')
     temperature: float = 0.7
@@ -35,12 +36,18 @@ class LLMResponse(BaseModel):
 
 
 class ModelConfig(BaseModel):
+    id: str
+    name: str
+    max_model_len: int = 8192
+    restrict_user_assistant_alternate: bool = False
+
+
+class ProviderConfig(BaseModel):
     """
     Defines the configuration for a single model or API.
 
     Attributes:
-    name (str): The unique name of the model or API.
-    mode (Literal): The mode of the model, e.g., "gemini", "generic_api", "openai", "vllm".
+    provider_type (Literal): The mode of the model, e.g., "gemini", "generic_api", "openai", "vllm".
     base_url (Optional[str]): The base URL for the API, if applicable.
     api_key (Optional[str]): The API key for authentication, if applicable.
     restrict_user_assistant_alternate (bool): Whether to restrict messages to only user and assistant roles.
@@ -48,21 +55,20 @@ class ModelConfig(BaseModel):
     device (str): The device to run the model on, e.g., "cpu", "cuda", "auto".
     dtype (str): The data type for model computations, e.g., "float32", "float16", "bfloat16", "auto".
     """
-    name: str
-    mode: Literal["gemini", "generic_api", "openai", "vllm"] = "generic_api"
-    max_model_len: int = 8192
+    id: str
+    type: Literal["GOOGLE", "OPENAI", "VLLM"] = "GOOGLE"
     base_url: Optional[str] = None
     api_key: Optional[str] = None
-    restrict_user_assistant_alternate: bool = False
+    supported_families: List[ModelConfig] = []
 
-    tensor_parallel_size: int = 1
-    device: str = 'auto'
-    dtype: str = 'auto'
+    # tensor_parallel_size: int = 1
+    # device: str = 'auto'
+    # dtype: str = 'auto'
 
 
 class ClientConfig(BaseModel):
     """The root configuration for the client module."""
-    models: List[ModelConfig] = Field(default_factory=list)
+    providers: List[ProviderConfig] = Field(default_factory=list)
     initialize_mode: Literal['create_task', 'run_forever'] = 'create_task'
     timeout_seconds: NonNegativeInt = 300
     sleep_interval_seconds: float = 0.1

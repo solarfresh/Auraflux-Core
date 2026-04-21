@@ -3,7 +3,7 @@ from typing import Any
 
 from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
-                                                ModelConfig)
+                                                ProviderConfig)
 
 
 class BaseHandler(ABC):
@@ -12,7 +12,7 @@ class BaseHandler(ABC):
     language model handlers.
     """
 
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ProviderConfig):
         self.config = config
         self.logger = setup_logging(name=f"[{self.__class__.__name__}]")
 
@@ -27,4 +27,7 @@ class BaseHandler(ABC):
         """
         Generates a streaming response from a language model.
         """
+        pass
+
+    def get_available_models(self):
         pass
