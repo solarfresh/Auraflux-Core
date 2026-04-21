@@ -19,6 +19,7 @@ class LLMRequest(BaseModel):
     """
     max_tokens: NonNegativeInt = 4096
     messages: List[Message]
+    provider: str
     model: str
     system_message: str = Field(default='You are a helpful AI Assistant.')
     temperature: float = 0.7

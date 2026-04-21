@@ -92,19 +92,19 @@ class ClientManager:
             error_to_set = None
 
             try:
-                handler = self.handlers.get(request.model)
+                handler = self.handlers.get(request.provider)
 
                 if handler:
                     response = await handler.generate(request)
-                    self.logger.debug(f"[{request.model}] Handler response: {response}")
+                    self.logger.debug(f"[{request.provider}] Handler response: {response}")
                 else:
-                    error_msg = f"Handler for model '{request.model}' not found. Check configuration."
+                    error_msg = f"Handler for provider '{request.provider}' not found. Check configuration."
                     self.logger.error(error_msg)
                     error_to_set = LLMResponse(text=error_msg)
 
             except Exception as e:
-                self.logger.error(f"[{request.model}] Error processing request: {e}", exc_info=True)
-                error_to_set = LLMResponse(text=f"Error processing request for model {request.model}: {e}")
+                self.logger.error(f"[{request.provider}] Error processing request: {e}", exc_info=True)
+                error_to_set = LLMResponse(text=f"Error processing request for provider {request.provider}: {e}")
 
             # 3. CRITICAL: Safely set the result or exception on the Future
             try:
@@ -115,20 +115,20 @@ class ClientManager:
                 elif response is not None:
                     if not future.done():
                         future.set_result(response)
-                        self.logger.info(f"[{request.model}] Dispatched request completed.")
+                        self.logger.info(f"[{request.provider}] Dispatched request completed.")
             except asyncio.InvalidStateError:
-                self.logger.warning(f"[{request.model}] Future was already completed (possibly cancelled by generator).")
+                self.logger.warning(f"[{request.provider}] Future was already completed (possibly cancelled by generator).")
             except Exception as e:
                 # If setting the result/exception fails, log but proceed to task_done
-                self.logger.critical(f"[{request.model}] CRITICAL FAILURE setting Future result/exception: {e}", exc_info=True)
+                self.logger.critical(f"[{request.provider}] CRITICAL FAILURE setting Future result/exception: {e}", exc_info=True)
 
             # 4. FINAL STEP: Mark task as done in the queue
             # This must be the last thing, and is the reason for the inner structure.
             try:
                 self.request_queue.task_done()
-                self.logger.debug(f"[{request.model}] Queue task_done() called.") # FIX: Add confirmation log
+                self.logger.debug(f"[{request.provider}] Queue task_done() called.") # FIX: Add confirmation log
             except Exception as e:
-                self.logger.critical(f"FATAL: Failed to call task_done() for {request.model}: {e}")
+                self.logger.critical(f"FATAL: Failed to call task_done() for {request.provider}: {e}")
 
     def _start_dispatcher(self):
         """Starts a single background task to dispatch requests."""
@@ -171,7 +171,7 @@ class ClientManager:
             self.request_queue.put_nowait((request, future))
         except Exception as e:
             # If coroutine_threadsafe fails (e.g. loop closed), set exception on future from this thread
-            self.logger.error(f"[{request.model}][TID:{worker_tid}] Failure inside submit_to_queue: {e}")
+            self.logger.error(f"[{request.provider}][TID:{worker_tid}] Failure inside submit_to_queue: {e}")
             # Use loop.call_soon to set the exception back in the dispatcher's loop context
             self.loop.call_soon(future.set_exception, LLMResponse(text=f"Queue put failed internally: {e}"))
 
@@ -183,14 +183,14 @@ class ClientManager:
         then awaiting a Future object which will be completed by the dispatcher.
         """
         worker_tid = threading.get_ident()
-        self.logger.info(f"[{request.model}] Generate called. Worker TID: {worker_tid}")
+        self.logger.info(f"[{request.provider}] Generate called. Worker TID: {worker_tid}")
         future = Future()
 
         if self.initialize_mode == 'create_task':
             # Put the request and the future object into the queue
-            self.logger.debug(f"Submitting request for model {request.model} to the queue.")
+            self.logger.debug(f"Submitting request for provider {request.provider} to the queue.")
             await self.request_queue.put((request, future))
-            self.logger.debug(f"Request for model {request.model} added to the queue.")
+            self.logger.debug(f"Request for model {request.provider} added to the queue.")
 
         elif self.initialize_mode == 'run_forever':
             # Submit the request to the queue in the background thread's event loop
@@ -199,7 +199,7 @@ class ClientManager:
 
             # Schedule the submission in the background thread's event loop
             self.loop.call_soon_threadsafe(self.submit_to_queue, request, future)
-            self.logger.info(f"Request for model {request.model} submitted to the queue in background thread.")
+            self.logger.info(f"Request for provider {request.provider} submitted to the queue in background thread.")
         else:
             raise RuntimeError("ClientManager is not properly initialized.")
 
@@ -208,7 +208,7 @@ class ClientManager:
             raise RuntimeError("Event loop for ClientManager is not initialized.")
 
         try:
-            self.logger.info(f"[{request.model}] Awaiting response from dispatcher (using controlled polling)...")
+            self.logger.info(f"[{request.provider}] Awaiting response from dispatcher (using controlled polling)...")
 
             # The spinning loop with sleep to keep Celery worker responsive
             # This is a workaround for Celery's known issue with async tasks
@@ -224,10 +224,10 @@ class ClientManager:
 
                 time.sleep(self.config.sleep_interval_seconds)
 
-            self.logger.info(f"[{request.model}] Awaiting response from dispatcher...")
+            self.logger.info(f"[{request.provider}] Awaiting response from dispatcher...")
             response = await future
         except Exception as e:
-            self.logger.error(f"[{request.model}] Error awaiting response: {e}", exc_info=True)
+            self.logger.error(f"[{request.provider}] Error awaiting response: {e}", exc_info=True)
             raise e
 
         return response
@@ -236,14 +236,14 @@ class ClientManager:
         """
         Generates a streaming response from the appropriate handler.
         """
-        handler = self.handlers.get(request.model)
+        handler = self.handlers.get(request.provider)
 
         if handler and hasattr(handler, 'generate_stream'):
             stream_generator = handler.generate_stream(request)
             for response in stream_generator:
                 yield response
         else:
-            error_msg = f"Streaming not supported for model '{request.model}' or handler not found."
+            error_msg = f"Streaming not supported for provider '{request.provider}' or handler not found."
             self.logger.error(error_msg)
             raise NotImplementedError(error_msg)
 
