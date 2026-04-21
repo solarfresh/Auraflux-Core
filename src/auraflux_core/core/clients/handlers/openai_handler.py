@@ -6,7 +6,7 @@ from openai.types.chat.chat_completion import ChatCompletion
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
-                                                ModelConfig)
+                                                ProviderConfig)
 
 
 class OpenAIHandler(BaseHandler):
@@ -14,7 +14,7 @@ class OpenAIHandler(BaseHandler):
     A concrete handler that adapts the OpenAI API to the BaseHandler interface.
     """
 
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ProviderConfig):
         super().__init__(config=config)
         self.config = config
         # The OpenAI client automatically reads from the OPENAI_API_KEY env var

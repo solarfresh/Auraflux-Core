@@ -5,11 +5,11 @@ from google.genai import types
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
-                                                ModelConfig)
+                                                ProviderConfig)
 
 
 class GeminiHandler(BaseHandler):
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ProviderConfig):
         super().__init__(config=config)
         # Configure the Gemini API client
         self.client = genai.Client(api_key=self.config.api_key)

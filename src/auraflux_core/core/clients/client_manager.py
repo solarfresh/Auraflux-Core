@@ -12,11 +12,11 @@ from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.schemas.clients import (ClientConfig, LLMRequest,
                                                 LLMResponse)
 
-try:
-    from auraflux_core.core.clients.handlers.vllm_handler import VLLMHandler
-    using_vllm_handler = True
-except ImportError:
-    using_vllm_handler = False
+# try:
+#     from auraflux_core.core.clients.handlers.vllm_handler import VLLMHandler
+#     using_vllm_handler = True
+# except ImportError:
+#     using_vllm_handler = False
 
 
 class ClientManager:
@@ -46,32 +46,32 @@ class ClientManager:
         else:
             raise ValueError(f"Invalid initialize_mode: {self.initialize_mode}")
 
-    def get_available_models(self, model_id):
-        return self.handlers[model_id].get_available_models()
+    def get_available_models(self, provider_id):
+        return self.handlers[provider_id].get_available_models()
 
     async def instantiate_handlers(self):
         """
         Instantiates all necessary LLM handlers based on the provided configuration.
         """
-        for model_config in self.config.models:
-            api_key = model_config.api_key
-            if not api_key and model_config.provider_type not in ('vllm',):
-                raise ValueError(f"API key for model '{model_config.name}' is not provided.")
+        for provider_config in self.config.providers:
+            api_key = provider_config.api_key
+            if not api_key and provider_config.type not in ('vllm',):
+                raise ValueError(f"API key for provider '{provider_config.id}' is not provided.")
 
             # vLLM is an optional dependency
-            if using_vllm_handler and model_config.provider_type == "VLLM":
-                handler_instance = VLLMHandler(config=model_config)
-                await handler_instance.ainit()
+            # if using_vllm_handler and model_config.provider_type == "VLLM":
+            #     handler_instance = VLLMHandler(config=model_config)
+            #     await handler_instance.ainit()
 
-            if model_config.provider_type == "GOOGLE":
-                handler_instance = GeminiHandler(config=model_config)
+            if provider_config.type == "GOOGLE":
+                handler_instance = GeminiHandler(config=provider_config)
 
-            if model_config.provider_type == "OPENAI":
-                handler_instance = OpenAIHandler(config=model_config)
+            if provider_config.type == "OPENAI":
+                handler_instance = OpenAIHandler(config=provider_config)
             # Add other handlers here as they are implemented
 
             if handler_instance:
-                self.handlers[model_config.id] = handler_instance
+                self.handlers[provider_config.id] = handler_instance
 
     async def _dispatch_requests(self):
         """Dispatches requests from the queue to the correct handler."""
