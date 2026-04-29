@@ -4,13 +4,277 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
+from pydantic import ValidationError
 
-from auraflux_core.canvases.schemas import (ConceptualEdge, ConceptualGraph, NodeHandle,
+from auraflux_core.canvases.schemas import (ConceptualEdge, ConceptualEdgeType,
+                                            ConceptualGraph, ConceptualNode,
                                             ConceptualNodeType, ExpansionNodes,
-                                            Position, SpatialLocateToolConfig)
+                                            NodeHandle, Position,
+                                            SpatialLocateToolConfig)
 from auraflux_core.core.tools.base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
+
+
+class GraphSerializerTool(BaseTool):
+    """
+    Serializes validated ConceptualNode and ConceptualEdge objects into
+    a line-based NDJSON (Newline Delimited JSON) format for Auraflux.
+    """
+
+    async def run(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]], output_path: str) -> Dict[str, Any]:
+        """
+        Converts the graph data into a text-based .graph file.
+
+        Args:
+            nodes: List of validated node dictionaries.
+            edges: List of validated edge dictionaries.
+            output_path: Destination path for the .graph file.
+        """
+        self.logger.info(f"Serializing graph to {output_path}")
+
+        line_count = 0
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                # 1. Serialize Nodes
+                for node_data in nodes:
+                    line = {"type": "node", "data": node_data}
+                    f.write(json.dumps(line, ensure_ascii=False) + "\n")
+                    line_count += 1
+
+                # 2. Serialize Edges
+                for edge_data in edges:
+                    line = {"type": "edge", "data": edge_data}
+                    f.write(json.dumps(line, ensure_ascii=False) + "\n")
+                    line_count += 1
+
+            self.logger.info(f"Successfully serialized {line_count} lines.")
+
+            return {
+                "success": True,
+                "file_path": output_path,
+                "stats": {
+                    "nodes": len(nodes),
+                    "edges": len(edges),
+                    "total_lines": line_count
+                }
+            }
+
+        except Exception as e:
+            error_msg = f"Serialization failed: {str(e)}"
+            self.logger.error(error_msg)
+            return {"success": False, "error": error_msg}
+
+    def get_name(self) -> str:
+        return "graph_serializer"
+
+    def get_description(self) -> str:
+        return (
+            "Converts validated graph objects into a line-based Textual Graph (.graph). "
+            "Each line represents a JSON object of either a node or an edge, "
+            "optimized for version control and Phase 2 spatial injection."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of validated ConceptualNode dictionaries."
+                },
+                "edges": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of validated ConceptualEdge dictionaries."
+                },
+                "output_path": {
+                    "type": "string",
+                    "description": "The target file path (e.g., 'research_alpha.graph')."
+                }
+            },
+            "required": ["nodes", "edges", "output_path"]
+        }
+
+
+class OntologyValidatorTool(BaseTool):
+    """
+    Validates a graph's adherence to the Empirical Science Ontology.
+    Checks for structural integrity, grounding (source_ref), and logical flow.
+    """
+
+    async def run(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Performs a deep audit of nodes and edges for Phase 1 compliance.
+        """
+        results = {
+            "is_valid": True,
+            "errors": [],
+            "stats": {"node_count": len(nodes), "edge_count": len(edges)}
+        }
+
+        # 1. Node-Level Validation
+        validated_nodes = []
+        for node_data in nodes:
+            try:
+                node = ConceptualNode(**node_data)
+
+                # Rule: Phase 1 spatial constraint
+                if node.position is not None:
+                    results["errors"].append(f"Node[{node.id}]: Spatial data (position) found in Phase 1.")
+
+                # Rule: Empirical Grounding (Zero-Inference)
+                if node.type in [ConceptualNodeType.EVENT, ConceptualNodeType.RESOURCE]:
+                    if not node.source_ref or len(node.source_ref.strip()) < 3:
+                        results["errors"].append(f"Node[{node.id}]: {node.type} missing mandatory 'source_ref'.")
+
+                # Rule: Reasoning Requirement
+                if node.type in [ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME]:
+                    if not node.rationale or len(node.rationale.strip()) < 10:
+                        results["errors"].append(f"Node[{node.id}]: {node.type} missing detailed 'rationale'.")
+
+                validated_nodes.append(node)
+            except ValidationError as e:
+                results["errors"].append(f"Node Schema Error: {str(e)}")
+
+        # 2. Edge-Level Validation (Logic Flow)
+        for edge_data in edges:
+            try:
+                edge = ConceptualEdge(**edge_data)
+
+                # Rule: Empirical Logic Connectivity
+                if edge.type == ConceptualEdgeType.VALIDATES:
+                    if not edge.evidence:
+                        results["errors"].append(f"Edge[{edge.source}->{edge.target}]: VALIDATES edge missing 'evidence'.")
+
+                # Rule: Constraint Origin
+                if edge.type == ConceptualEdgeType.CONSTRAINS:
+                    # Optional: Logic to check if source node is actually a BOUNDARY node
+                    pass
+
+            except ValidationError as e:
+                results["errors"].append(f"Edge Schema Error: {str(e)}")
+
+        if results["errors"]:
+            results["is_valid"] = False
+            self.logger.warning(f"Validation failed with {len(results['errors'])} errors.")
+        else:
+            self.logger.info("Graph validated successfully against Empirical Ontology.")
+
+        return results
+
+    def get_name(self) -> str:
+        return "ontology_validator"
+
+    def get_description(self) -> str:
+        return (
+            "Validates that the generated knowledge graph adheres to the 5-Node/4-Edge "
+            "Empirical Science standards. Checks for mandatory source references and "
+            "logical evidence."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of ConceptualNode data dictionaries."
+                },
+                "edges": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of ConceptualEdge data dictionaries."
+                }
+            },
+            "required": ["nodes", "edges"]
+        }
+
+
+class SchemaExtractorTool(BaseTool):
+    """
+    Orchestrates the conversion of unstructured text into an Empirical Graph.
+    This tool provides the structured interface for LLM extraction tasks.
+    """
+
+    async def run(self, text_chunk: str, source_id: str, focus_hint: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Processes a text chunk and returns a dictionary of extracted nodes and edges.
+
+        Args:
+            text_chunk: The raw text content to analyze.
+            source_id: The index/ID of the paragraph (for source_ref).
+            focus_hint: Optional guidance (e.g., "focus on methodology").
+        """
+        self.logger.info(f"Extracting knowledge from source: {source_id}")
+
+        # NOTE: In the actual AgenticOrchestrator, the LLM will be called
+        # using the prompt instructions defined in this tool's description
+        # and the parameters below.
+
+        # This structure simulates what the LLM should return via functional calling.
+        extraction_result = {
+            "nodes": [], # List of ConceptualNode dicts
+            "edges": [], # List of ConceptualEdge dicts
+            "metadata": {
+                "source_id": source_id,
+                "process_status": "raw_extracted"
+            }
+        }
+
+        return extraction_result
+
+    def get_name(self) -> str:
+        return "schema_extractor"
+
+    def get_description(self) -> str:
+        return (
+            "Transforms scientific text into an empirical graph structure. "
+            "Extracted nodes must use labels reflecting their empirical role: "
+            f"Types: {[t.value for t in ConceptualNodeType if t.name in ['EVENT', 'INSIGHT', 'OUTCOME', 'BOUNDARY', 'ENTITY']]}. "
+            "For every EVENT/ENTITY, 'source_ref' must be set to the provided source_id. "
+            "For every INSIGHT, 'rationale' must explain the inference. "
+            "All 'position' fields must remain null."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "label": {"type": "string"},
+                            "type": {"type": "string", "enum": [t.value for t in ConceptualNodeType]},
+                            "content": {"type": "string"},
+                            "source_ref": {"type": "string"},
+                            "rationale": {"type": "string"},
+                            "anchor_id": {"type": "string"}
+                        },
+                        "required": ["label", "type"]
+                    }
+                },
+                "edges": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source": {"type": "string"},
+                            "target": {"type": "string"},
+                            "type": {"type": "string", "enum": [t.value for t in ConceptualEdgeType]},
+                            "evidence": {"type": "string"},
+                            "rationale": {"type": "string"}
+                        },
+                        "required": ["source", "target", "type"]
+                    }
+                }
+            },
+            "required": ["nodes", "edges"]
+        }
 
 
 class SpatialLocateTool(BaseTool):
@@ -101,7 +365,9 @@ class SpatialLocateTool(BaseTool):
                     source_handle=source_handle,
                     target=taget,
                     target_handle=target_handle,
-                    weight=data['weight']
+                    weight=data['weight'],
+                    evidence=None,
+                    rationale=None,
                 )
                 graph_state.edges.append(conceptual_edge)
 
