@@ -13,10 +13,11 @@ class AgenticStrategy(OrchestrationStrategy):
     Uses 'name' in Message to distinguish between Architect and Auditor turns.
     """
 
-    def __init__(self, actor_name: str, auditor_name: str, max_retries: int = 2):
+    def __init__(self, actor_name: str, auditor_name: str, validator_tool_name: str, max_retries: int = 2):
         super().__init__()
         self.actor_name = actor_name
         self.auditor_name = auditor_name
+        self.validator_tool_name = validator_tool_name
         self.max_retries = max_retries
 
     async def execute(
@@ -37,22 +38,34 @@ class AgenticStrategy(OrchestrationStrategy):
             ]
 
             for attempt in range(self.max_retries + 1):
-                # A. Architect Generation
                 # dispatch calls architect.generate(messages)
-                output = await self.dispatch(state, self.actor_name, agents, messages=messages)
+                output = await self.dispatch(
+                    state,
+                    self.actor_name,
+                    agents,
+                    messages=messages,
+                    tools=tools
+                )
 
-                # B. Auditor Validation
+                valid_res = await self.dispatch(
+                    state,
+                    self.validator_tool_name,
+                    tools,
+                    nodes=output.get("nodes", []),
+                    edges=output.get("edges", [])
+                )
+
                 # Auditor message named by the agent name
                 audit_msgs = [
-                    Message(role="user", content=f"Audit this: {output}", name="User")
+                    Message(role="user", content=f"Audit this: {output}\nValidation Results: {valid_res}", name="User")
                 ]
                 audit_res = await self.dispatch(state, self.auditor_name, agents, messages=audit_msgs)
 
-                if audit_res.get("is_valid"):
-                    processed_results.append(output)
+                if valid_res.get("is_valid") and audit_res.get("is_valid"):
+                    state.output["final_graph"] = output
                     break
 
-                # C. Prepare Refinement
+                # Prepare Refinement
                 if attempt < self.max_retries:
                     state.update_status(OrchestratorStatus.REFINING)
 
@@ -61,8 +74,9 @@ class AgenticStrategy(OrchestrationStrategy):
                         Message(role="assistant", content=str(output), name=self.actor_name)
                     )
                     # We record the auditor's critique with its name
+                    critique_combined = f"Tool Errors: {valid_res.get('errors')}\nAuditor Critique: {audit_res.get('critique')}"
                     messages.append(
-                        Message(role="user", content=f"Critique: {audit_res['critique']}", name=self.auditor_name)
+                        Message(role="user", content=critique_combined, name=self.auditor_name)
                     )
                 else:
                     processed_results.append(output)

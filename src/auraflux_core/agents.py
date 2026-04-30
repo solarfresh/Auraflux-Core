@@ -1,6 +1,7 @@
 from typing import Any, Dict, NamedTuple, Type, Union
 
-from auraflux_core.canvases.agents import GraphSynthesistAgent
+from auraflux_core.canvases.agents import (GraphSynthesistAgent,
+                                           KnowledgeArchitect, OntologyAuditor)
 from auraflux_core.canvases.schemas import (GraphSynthesistAgentConfig,
                                             SpatialLocateToolConfig)
 from auraflux_core.core.agents.generic_agent import GenericAgent
@@ -22,6 +23,14 @@ AGENT_REGISTRY: Dict[str, AgentImplementation] = {
         tool_config_mapping={
             'spatial_locate': SpatialLocateToolConfig
         }
+    ),
+    'KnowledgeArchitect': AgentImplementation(
+        agent_class=KnowledgeArchitect,
+        config_class=AgentConfig,
+    ),
+    'OntologyAuditor': AgentImplementation(
+        agent_class=OntologyAuditor,
+        config_class=AgentConfig,
     ),
     # Default fallback or other agents
     'default': AgentImplementation(
