@@ -33,6 +33,7 @@ class LLMRequest(BaseModel):
 class LLMResponse(BaseModel):
     """A standardized schema for all model inference responses."""
     text: str
+    token_usage: int = 0
 
 
 class ModelConfig(BaseModel):

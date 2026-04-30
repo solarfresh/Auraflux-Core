@@ -7,20 +7,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrchestratorStatus(str, Enum):
-    IDLE = "idle"
-    INGESTING = "ingesting"
-    PROCESSING = "processing"
-    VALIDATING = "validating"
-    REFINING = "refining"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    IDLE = "IDLE"
+    INGESTING = "INGESTING"
+    PROCESSING = "PROCESSING"
+    VALIDATING = "VALIDATING"
+    REFINING = "REFINING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 class ExecutionStep(BaseModel):
     """Represents a single atomic action within the orchestration loop."""
     step_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    tool_name: str
+    actor_name: str
     input_params: Dict[str, Any]
     output_data: Optional[Any] = None
     error: Optional[str] = None

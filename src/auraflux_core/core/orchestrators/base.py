@@ -1,6 +1,6 @@
-import logging
 from typing import Any, Dict, List, Optional
 
+from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.orchestrators.state import (OrchestratorState,
                                                     OrchestratorStatus)
 from auraflux_core.core.orchestrators.strategies.base import \
@@ -25,7 +25,7 @@ class BaseOrchestrator:
         self.agents = agents
         self.config = config or {}
         self.state = OrchestratorState()
-        self.logger = logging.getLogger(f"[{self.__class__.__name__}]")
+        self.logger = setup_logging(name=f"[{self.__class__.__name__}]")
 
     async def run(self, input_data: Any) -> OrchestratorState:
         """

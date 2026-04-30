@@ -40,7 +40,8 @@ class GeminiHandler(BaseHandler):
                 raise ValueError("Received an empty or invalid response from the Gemini API.")
 
             response_text = response.text
-            return LLMResponse(text=response_text)
+            usage_metadata = response.usage_metadata
+            return LLMResponse(text=response_text, token_usage=getattr(usage_metadata, 'total_token_count', 0))
 
         except Exception as e:
             raise RuntimeError(f"An error occurred while calling the Gemini API: {e}")

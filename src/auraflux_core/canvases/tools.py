@@ -1,6 +1,5 @@
 import copy
 import json
-import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import networkx as nx
@@ -12,8 +11,6 @@ from auraflux_core.canvases.schemas import (ConceptualEdge, ConceptualEdgeType,
                                             NodeHandle, Position,
                                             SpatialLocateToolConfig)
 from auraflux_core.core.tools.base_tool import BaseTool
-
-logger = logging.getLogger(__name__)
 
 
 class GraphSerializerTool(BaseTool):
@@ -305,8 +302,8 @@ class SpatialLocateTool(BaseTool):
             graph_state = ConceptualGraph(**kwargs.get('existing_graph_state', {}))
             existing_node_ids = list(graph_state.nodes.keys())
 
-            logger.debug(f"expansion_data: {kwargs.get('expansion_data', {})}")
-            logger.debug(f"existing_graph_state: {kwargs.get('existing_graph_state', {})}")
+            self.logger.debug(f"expansion_data: {kwargs.get('expansion_data', {})}")
+            self.logger.debug(f"existing_graph_state: {kwargs.get('existing_graph_state', {})}")
             if not expansion.nodes:
                 return json.dumps({"error": "Expansion batch is empty."})
 

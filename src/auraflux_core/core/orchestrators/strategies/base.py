@@ -1,8 +1,8 @@
-import logging
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
+from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.orchestrators.state import (ExecutionStep,
                                                     OrchestratorState)
 
@@ -13,7 +13,7 @@ class OrchestrationStrategy(ABC):
     Subclasses implement specific patterns like Sequential or Agentic.
     """
     def __init__(self):
-        self.logger = logging.getLogger(f"[{self.__class__.__name__}]")
+        self.logger = setup_logging(name=f"[{self.__class__.__name__}]")
 
     @abstractmethod
     async def execute(
@@ -53,14 +53,16 @@ class OrchestrationStrategy(ABC):
         try:
             # Execute the call
             result = await actual_method(**kwargs)
+            self.logger.info('========== actual_method_result ==========')
+            self.logger.info(result)
             duration = (time.perf_counter() - start_time) * 1000
 
             # Consistent Telemetry Recording
             step = ExecutionStep(
-                tool_name=actor_name,
+                actor_name=actor_name,
                 input_params=kwargs,
                 output_data=result,
-                token_usage=result.get("usage", 0) if isinstance(result, dict) else 0,
+                token_usage=getattr(result, "token_usage", 0),
                 duration_ms=duration
             )
             state.add_step(step)
@@ -68,5 +70,5 @@ class OrchestrationStrategy(ABC):
 
         except Exception as e:
             self.logger.error(f"Dispatch failure for {actor_name}: {str(e)}")
-            state.add_step(ExecutionStep(tool_name=actor_name, input_params=kwargs, error=str(e)))
+            state.add_step(ExecutionStep(actor_name=actor_name, input_params=kwargs, error=str(e)))
             raise e

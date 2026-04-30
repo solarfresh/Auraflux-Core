@@ -120,7 +120,10 @@ class SequentialStrategy(OrchestrationStrategy):
 
         # 2. Linear Processing Loop
         for unit in units:
-            state.current_unit_id = unit.get("source_id") or unit.get("id")
+            unit_id = unit.get("source_id") or unit.get("id")
+            state.current_unit_id = unit_id
+
+            self.logger.info(f"Processing Unit [{unit_id}]: Initiating knowledge extraction.")
 
             # Construct a single-turn message for the actor
             messages = [
