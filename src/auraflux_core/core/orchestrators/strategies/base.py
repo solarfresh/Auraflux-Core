@@ -53,8 +53,6 @@ class OrchestrationStrategy(ABC):
         try:
             # Execute the call
             result = await actual_method(**kwargs)
-            self.logger.info('========== actual_method_result ==========')
-            self.logger.info(result)
             duration = (time.perf_counter() - start_time) * 1000
 
             # Consistent Telemetry Recording

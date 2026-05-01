@@ -84,7 +84,7 @@ class BaseAgent(ABC):
 
             output_string = self.postprocess_llm_output(response.text)
 
-            return Message(role='assistant', content=output_string, name=self.name)
+            return Message(role='assistant', content=output_string, name=self.name, token_usage=response.token_usage)
         except Exception as e:
             self.logger.error(f"Error during LLM generation for agent '{self.name}': {e}")
             raise e

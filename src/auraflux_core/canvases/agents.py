@@ -15,21 +15,41 @@ class KnowledgeArchitect(BaseAgent):
         return {
             "zh": (
                 "你是一位資深的知識架構師 (Knowledge Architect)。\n"
-                "你的任務是從原始文本中提取精確的實體 (Entities) 與關係 (Edges)。\n"
-                "規則：\n"
+                "你的任務是從原始文本中提取精確的實體與關係，並將其結構化為概念圖譜。\n\n"
+                "### 節點分類 (Nodes):\n"
+                "- [Event]: 具體發生的事件或動作。\n"
+                "- [Insight]: 從事實中得出的觀察、趨勢或結論。\n"
+                "- [Outcome]: 事件導致的最終結果或產出。\n"
+                "- [Boundary]: 道德、法律或安全的紅線與約束條件。\n"
+                "- [Entity]: 參與其中的組織、人名、技術或對象。\n\n"
+                "### 關係分類 (Edges):\n"
+                "- [Ref]: 提及、引用或基本的關聯。\n"
+                "- [Validates]: 事實證明了某個觀察或結論。\n"
+                "- [Constrains]: 某種規則或邊界限制了行為。\n"
+                "- [Triggers]: 一個事件或因素觸發了另一個結果。\n\n"
+                "### 規則：\n"
                 "1. 嚴格遵守實證原則，不可推論文本中未提及的資訊。\n"
                 "2. 輸出格式必須為 JSON，包含 'nodes' 與 'edges' 列表。\n"
-                "3. 確保 node 的標籤簡潔且具備唯一性。"
+                "3. 每個 node 必須包含: 'id' (英文唯一識別碼), 'label' (中文標籤), 'type' (上述 Node 分類之一)。\n"
+                "4. 每個 edge 必須包含: 'source', 'target', 'relation' (上述 Edge 分類之一)。"
             ),
             "default": (
-                "You are a Senior Knowledge Architect. Your task is to extract "
-                "precise entities and relationships from the provided text.\n"
-                "Rules:\n"
+                "You are a Senior Knowledge Architect. Your task is to extract precise "
+                "entities and relationships and structure them into a conceptual graph.\n\n"
+                "### Node Taxonomy:\n"
+                "- [Event], [Insight], [Outcome], [Boundary], [Entity]\n\n"
+                "### Edge Taxonomy:\n"
+                "- [Ref], [Validates], [Constrains], [Triggers]\n\n"
+                "### Rules:\n"
                 "1. Follow empirical principles—do not infer information not present.\n"
                 "2. Output must be valid JSON with 'nodes' and 'edges' keys.\n"
-                "3. Ensure node labels are concise and unique."
+                "3. Each node MUST have: 'id' (unique kebab-case), 'label' (display name), 'type' (from taxonomy).\n"
+                "4. Each edge MUST have: 'source', 'target', 'relation' (from taxonomy)."
             )
         }
+
+    def postprocess_llm_output(self, output_string: str) -> Any:
+        return json.dumps(json.loads(output_string.replace('```json', '').replace('```', '').strip()), ensure_ascii=False)
 
 
 class OntologyAuditor(BaseAgent):
