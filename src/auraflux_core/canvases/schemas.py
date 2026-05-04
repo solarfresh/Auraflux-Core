@@ -197,7 +197,7 @@ class SpatialLocateToolConfig(ToolConfig):
 
 
 class GraphSynthesistAgentConfig(AgentConfig):
-    tool_use: Literal['TOOL_USE_DIRECT', 'TOOL_USE_AND_PROCESS', 'NO_TOOL_USE'] = 'TOOL_USE_DIRECT'
+    tool_execution_strategy: Literal['NONE', 'DIRECT', 'REFLECTIVE'] = 'DIRECT'
     tool_configs: Dict[str, Any] = {
         'spatial_locate': SpatialLocateToolConfig()
     }

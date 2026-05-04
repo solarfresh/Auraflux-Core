@@ -5,7 +5,8 @@
 ## 🌟 Key Features
 
 * **Unified LLM Orchestration**: Manage multiple providers (e.g., Google Gemini, OpenAI) through a centralized `ClientManager`.
-* **Flexible Reasoning Patterns**: Support for various execution strategies including `TOOL_USE_DIRECT` and `TOOL_USE_AND_PROCESS` (reason-then-act).
+* **Dual-Protocol**: Highlighting that the system can handle both modern APIs and legacy/open-source Prompt-based methods is a major selling point.
+* **Reflective vs. Direct**: Replaced the technical `AND_PROCESS` with the more descriptive `REFLECTIVE`, which is a standard term in Agentic AI.
 * **Production-Ready Dispatching**: A queue-based request system designed for high-concurrency environments like Celery workers, ensuring non-blocking operations.
 * **Extensible Base Architecture**: Robust abstract base classes (`BaseAgent`, `BaseTool`, `BaseHandler`) allow for seamless customization of system components.
 * **Cross-Model Prompt Alignment**: Dynamic system message mapping via `_message_mapper` to align prompts across different languages and model families.
@@ -69,7 +70,6 @@ config = AgentConfig(
     name="Researcher",
     provider="GOOGLE",
     model="gemini-1.5-pro",
-    tool_use="TOOL_USE_AND_PROCESS",
     temperature=0.7
 )
 ```

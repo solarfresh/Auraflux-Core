@@ -11,7 +11,8 @@ class AgentConfig(BaseModel):
     lang: str = 'en'
     system_message: str | None = None
 
-    tool_use: Literal['TOOL_USE_DIRECT', 'TOOL_USE_AND_PROCESS', 'NO_TOOL_USE'] = 'NO_TOOL_USE'
+    tool_call_protocol: Literal['NATIVE', 'PROMPT'] = 'NATIVE'
+    tool_execution_strategy: Literal['NONE', 'DIRECT', 'REFLECTIVE'] = 'NONE'
     tool_configs: Dict[str, Any] = {}
 
     cot_message: str | None = None

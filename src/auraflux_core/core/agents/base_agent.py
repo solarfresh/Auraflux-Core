@@ -1,13 +1,15 @@
 import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Dict, List, Generator, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
+from auraflux_core.core.schemas.tools import (ToolCallProtocol,
+                                              ToolExecutionStrategy)
 from auraflux_core.core.tools.base_tool import BaseTool
 
 
@@ -47,11 +49,11 @@ class BaseAgent(ABC):
         copied_messages = [deepcopy(msg) for msg in messages[-self.config.turn_limit:]]
 
         try:
-            if self.config.tool_use == 'TOOL_USE_DIRECT':
+            if self.config.tool_execution_strategy == 'DIRECT':
                 tool_output_message = await self.generate_tool_message(copied_messages, tool_args_map=tool_args_map)
                 return tool_output_message
 
-            if self.config.tool_use == 'TOOL_USE_AND_PROCESS':
+            if self.config.tool_execution_strategy == 'REFLECTIVE':
                 last_message = await self.generate_tool_message(copied_messages)
                 self.logger.debug(f"Tool output: {last_message.content}")
                 copied_messages.append(last_message)
@@ -75,7 +77,7 @@ class BaseAgent(ABC):
                 messages=messages,
                 system_message=self.system_message,
                 max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature
+                temperature=self.config.temperature,
             )
 
             self.logger.debug(f"Sending request to LLM: {request}")
@@ -91,46 +93,9 @@ class BaseAgent(ABC):
 
     async def generate_tool_message(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
         self.logger.debug("Generating tool message...")
-        tool_message = self._message_mapper(self.get_tool_message_map())
-        tool_call_data: Dict[str, Any] = {}
-
-        if tool_message is not None:
-            try:
-                request = LLMRequest(
-                    provider=self.provider,
-                    model=self.model,
-                    messages=messages,
-                    system_message=tool_message,
-                )
-                self.logger.debug(f"Sending request to LLM: {request}")
-                response: LLMResponse = await self.client_manager.generate(request)
-                self.logger.debug(f"Received response from LLM: {response}")
-                tool_call_data = self.postprocess_tool_output(response.text)
-            except Exception as e:
-                self.logger.error(f"Error processing tool message from LLM: {e}")
-                raise e
-        else:
-            tool_call_data  = self.get_tool_call(messages=messages)
-
-        tool_name = tool_call_data.get('tool', 'default')
-        tool_call_args = tool_call_data.get('args', {})
-        if tool_args_map is not None:
-            tool_call_args.update(**tool_args_map.get(tool_name, {}))
-
-        tool = self.get_tool_map()[tool_name]
-        self.logger.debug("Retrieved tool for tool call.")
-
-        if tool is None:
-            self.logger.warning(f"No tool found for tool call: '{tool_name}'")
-            return Message(role='assistant', content=f"Error: Tool '{tool_name}' not available.", name=self.name)
-
-        try:
-            self.logger.debug(f"Executing tool '{tool_name}' with args: {tool_call_args}")
-            tool_output = await tool.run(**tool_call_args)
-            return Message(role='assistant', content=tool_output, name=self.name)
-        except Exception as e:
-            self.logger.error(f"Error executing tool '{tool_name}': {e}")
-            raise e
+        tool_call_data = await self._decide_tool_calls(messages)
+        messsage = await self._execute_tool_calls(tool_call_data, tool_args_map)
+        return messsage
 
     def generate_stream(self, message: Message, chat_history: List[Message]) -> Generator[Message, Any, Any]:
 
@@ -155,7 +120,7 @@ class BaseAgent(ABC):
         """
         pass
 
-    def get_tool_map(self) -> Dict[str, Any]:
+    def get_tool_map(self) -> Dict[str, BaseTool]:
         if not self._tool_cache:
             raise ValueError(f"No tools configured for {self.name}. Please check the agent configuration.")
 
@@ -177,6 +142,61 @@ class BaseAgent(ABC):
         to their respective tool-use messages.
         """
         return None
+
+    async def _decide_tool_calls(self, messages: List[Message]) -> Dict[str, Any]:
+        tool_call_data = {}
+        tool_message = self._message_mapper(self.get_tool_message_map())
+        if tool_message is not None:
+            request = LLMRequest(
+                provider=self.provider,
+                model=self.model,
+                messages=messages,
+                system_message=tool_message,
+            )
+            self.logger.debug(f"Sending request to LLM: {request}")
+            response: LLMResponse = await self.client_manager.generate(request)
+            self.logger.debug(f"Received response from LLM: {response}")
+            tool_call_data = self.postprocess_tool_output(response.text)
+        elif self.config.tool_call_protocol == ToolCallProtocol.NATIVE.value:
+            tool_map = self.get_tool_map()
+            request = LLMRequest(
+                provider=self.provider,
+                model=self.model,
+                messages=messages,
+                system_message=self.system_message,
+                tools=[t for t in tool_map.values()]
+            )
+            response: LLMResponse = await self.client_manager.generate(request)
+
+            if response.tool_calls:
+                tool_call_data = response.tool_calls
+            else:
+                raise ValueError("NATIVE protocol expected a tool call but got text response.")
+        else:
+            tool_call_data  = self.get_tool_call(messages=messages)
+
+        return tool_call_data
+
+    async def _execute_tool_calls(self, tool_call_data: Dict[str, Any], tool_args_map: Dict[str, Any] | None = None) -> Message:
+        tool_name = tool_call_data.get('tool', 'default')
+        tool_call_args = tool_call_data.get('args', {})
+        if tool_args_map is not None:
+            tool_call_args.update(**tool_args_map.get(tool_name, {}))
+
+        tool = self.get_tool_map()[tool_name]
+        self.logger.debug("Retrieved tool for tool call.")
+
+        if tool is None:
+            self.logger.warning(f"No tool found for tool call: '{tool_name}'")
+            return Message(role='assistant', content=f"Error: Tool '{tool_name}' not available.", name=self.name)
+
+        try:
+            self.logger.debug(f"Executing tool '{tool_name}' with args: {tool_call_args}")
+            tool_output = await tool.run(**tool_call_args)
+            return Message(role='assistant', content=tool_output, name=self.name)
+        except Exception as e:
+            self.logger.error(f"Error executing tool '{tool_name}': {e}")
+            raise e
 
     def _message_mapper(self, msg_map: Dict[str, str] | None) -> str | None:
         if msg_map is None:

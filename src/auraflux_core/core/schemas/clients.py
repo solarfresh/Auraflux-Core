@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, NonNegativeInt
 
 from auraflux_core.core.schemas.messages import Message
+from auraflux_core.core.tools.base_tool import BaseTool
 
 
 class LLMRequest(BaseModel):
@@ -24,6 +25,7 @@ class LLMRequest(BaseModel):
     system_message: str = Field(default='You are a helpful AI Assistant.')
     temperature: float = 0.7
     top_p: float = 0.95
+    tools: Optional[List[BaseTool]] = None
 
     # Non-standard field required by our infrastructure for structured output.
     # Pydantic allows us to explicitly define this alongside standard params.
@@ -34,6 +36,7 @@ class LLMResponse(BaseModel):
     """A standardized schema for all model inference responses."""
     text: str
     token_usage: int = 0
+    tool_calls: Optional[Dict[str, Any]] = None
 
 
 class ModelConfig(BaseModel):

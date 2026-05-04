@@ -6,6 +6,7 @@ from google.genai import types
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
                                                 ProviderConfig)
+from auraflux_core.core.tools.base_tool import ToolSpecConverter
 
 
 class GeminiHandler(BaseHandler):
@@ -41,7 +42,16 @@ class GeminiHandler(BaseHandler):
 
             response_text = response.text
             usage_metadata = response.usage_metadata
-            return LLMResponse(text=response_text, token_usage=getattr(usage_metadata, 'total_token_count', 0))
+            if response.candidates and len(response.candidates) > 0:
+                candidate = response.candidates[0]
+                if candidate.content and candidate.content.parts and len(candidate.content.parts) > 0:
+                    part = candidate.content.parts[0]
+                    if hasattr(part, 'function_call'):
+                        function_call = part.function_call
+
+            tool_calls = {'tool': function_call.name , 'args': function_call.args} if function_call is not None else None
+
+            return LLMResponse(text=response_text, token_usage=getattr(usage_metadata, 'total_token_count', 0), tool_calls=tool_calls)
 
         except Exception as e:
             raise RuntimeError(f"An error occurred while calling the Gemini API: {e}")
@@ -89,9 +99,19 @@ class GeminiHandler(BaseHandler):
         }
 
     def _generate_content_config(self, request: LLMRequest) -> types.GenerateContentConfig:
+        tools = []
+        if request.tools is not None:
+            tools = [
+                ToolSpecConverter.to_gemini(tool) for tool in request.tools
+            ]
+
         return types.GenerateContentConfig(
             system_instruction=request.system_message,
             max_output_tokens=request.max_tokens,
             temperature=request.temperature,
-            top_p=request.top_p
+            top_p=request.top_p,
+            tools=tools,
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.AUTO)
+            ),
         )

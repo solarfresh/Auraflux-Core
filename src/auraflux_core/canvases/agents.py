@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict
 
 from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.tools.base_tool import BaseTool
 
 
 class KnowledgeArchitect(BaseAgent):
@@ -104,7 +105,7 @@ class GraphSynthesistAgent(BaseAgent):
             )
         }
 
-    def get_tool_map(self) -> Dict[str, Any]:
+    def get_tool_map(self) -> Dict[str, BaseTool]:
         """
         Lazily loads and caches the Graphing tools.
         """
