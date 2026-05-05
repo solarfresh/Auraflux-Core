@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict
 
 from auraflux_core.core.orchestrators.state import (OrchestratorState,
@@ -44,15 +45,17 @@ class AgenticStrategy(OrchestrationStrategy):
                     self.actor_name,
                     agents,
                     messages=messages,
-                    tools=tools
                 )
+                output_json = json.loads(output.content)
+                self.logger.info('====== output ======')
+                self.logger.info(output)
 
                 valid_res = await self.dispatch(
                     state,
                     self.validator_tool_name,
                     tools,
-                    nodes=output.get("nodes", []),
-                    edges=output.get("edges", [])
+                    nodes=output_json.get("nodes", []),
+                    edges=output_json.get("edges", [])
                 )
 
                 # Auditor message named by the agent name
@@ -60,9 +63,10 @@ class AgenticStrategy(OrchestrationStrategy):
                     Message(role="user", content=f"Audit this: {output}\nValidation Results: {valid_res}", name="User")
                 ]
                 audit_res = await self.dispatch(state, self.auditor_name, agents, messages=audit_msgs)
+                audit_res_json = json.loads(audit_res.content)
 
-                if valid_res.get("is_valid") and audit_res.get("is_valid"):
-                    state.output["final_graph"] = output
+                if valid_res.get("is_valid") and audit_res_json.get("is_valid"):
+                    state.output["final_graph"] = output.content
                     break
 
                 # Prepare Refinement
@@ -74,7 +78,7 @@ class AgenticStrategy(OrchestrationStrategy):
                         Message(role="assistant", content=str(output), name=self.actor_name)
                     )
                     # We record the auditor's critique with its name
-                    critique_combined = f"Tool Errors: {valid_res.get('errors')}\nAuditor Critique: {audit_res.get('critique')}"
+                    critique_combined = f"Tool Errors: {audit_res_json.get('errors')}\nAuditor Critique: {audit_res_json.get('critique')}"
                     messages.append(
                         Message(role="user", content=critique_combined, name=self.auditor_name)
                     )

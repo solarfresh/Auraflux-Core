@@ -18,16 +18,16 @@ class KnowledgeArchitect(BaseAgent):
                 "你是一位資深的知識架構師 (Knowledge Architect)。\n"
                 "你的任務是從原始文本中提取精確的實體與關係，並將其結構化為概念圖譜。\n\n"
                 "### 節點分類 (Nodes):\n"
-                "- [Event]: 具體發生的事件或動作。\n"
-                "- [Insight]: 從事實中得出的觀察、趨勢或結論。\n"
-                "- [Outcome]: 事件導致的最終結果或產出。\n"
-                "- [Boundary]: 道德、法律或安全的紅線與約束條件。\n"
-                "- [Entity]: 參與其中的組織、人名、技術或對象。\n\n"
+                "- [EVENT]: 具體發生的事件或動作。\n"
+                "- [INSIGHT]: 從事實中得出的觀察、趨勢或結論。\n"
+                "- [OUTCOME]: 事件導致的最終結果或產出。\n"
+                "- [BOUNDARY]: 道德、法律或安全的紅線與約束條件。\n"
+                "- [ENTITY]: 參與其中的組織、人名、技術或對象。\n\n"
                 "### 關係分類 (Edges):\n"
-                "- [Ref]: 提及、引用或基本的關聯。\n"
-                "- [Validates]: 事實證明了某個觀察或結論。\n"
-                "- [Constrains]: 某種規則或邊界限制了行為。\n"
-                "- [Triggers]: 一個事件或因素觸發了另一個結果。\n\n"
+                "- [REF]: 提及、引用或基本的關聯。\n"
+                "- [VALIDATES]: 事實證明了某個觀察或結論。\n"
+                "- [CONSTRAINS]: 某種規則或邊界限制了行為。\n"
+                "- [TRIGGERS]: 一個事件或因素觸發了另一個結果。\n\n"
                 "### 規則：\n"
                 "1. 嚴格遵守實證原則，不可推論文本中未提及的資訊。\n"
                 "2. 輸出格式必須為 JSON，包含 'nodes' 與 'edges' 列表。\n"
@@ -38,9 +38,9 @@ class KnowledgeArchitect(BaseAgent):
                 "You are a Senior Knowledge Architect. Your task is to extract precise "
                 "entities and relationships and structure them into a conceptual graph.\n\n"
                 "### Node Taxonomy:\n"
-                "- [Event], [Insight], [Outcome], [Boundary], [Entity]\n\n"
+                "- [EVENT], [INSIGHT], [OUTCOME], [BOUNDARY], [ENTITY]\n\n"
                 "### Edge Taxonomy:\n"
-                "- [Ref], [Validates], [Constrains], [Triggers]\n\n"
+                "- [REF], [VALIDATES], [CONSTRAINS], [TRIGGERS]\n\n"
                 "### Rules:\n"
                 "1. Follow empirical principles—do not infer information not present.\n"
                 "2. Output must be valid JSON with 'nodes' and 'edges' keys.\n"
@@ -54,30 +54,42 @@ class KnowledgeArchitect(BaseAgent):
 
 
 class OntologyAuditor(BaseAgent):
-    """
-    Ontology Auditor Agent.
-    Behavior: Defined by system message to validate and critique extracted data.
-    Interface: Relies on the inherited generate() method.
-    """
-
     def get_system_message_map(self) -> Dict[str, str]:
         return {
             "zh": (
-                "你是一位嚴格的本體論審計員 (Ontology Auditor)。\n"
-                "你的任務是檢查架構師提取的圖譜資料是否符合邏輯與事實。\n"
-                "請回傳 JSON 格式並包含以下欄位：\n"
-                "- 'is_valid': 布林值，表示資料是否通過審核。\n"
-                "- 'critique': 字串，若不通過請提供具體的錯誤說明與修正建議。"
+                "你是一位「圖譜規格審計員」(Graph Schema Validator)。\n"
+                "你的唯一職責是確保【架構師】輸出的資料「完全符合既定規格」，嚴禁引入規格外的概念。\n\n"
+                "### 審核基準 (嚴格遵守)：\n"
+                "1. **節點類型 (Nodes)**：僅限 [EVENT], [INSIGHT], [OUTCOME], [BOUNDARY], [ENTITY]。禁止建議使用其他類型。\n"
+                "2. **關係類型 (Edges)**：僅限 [REF], [VALIDATES], [CONSTRAINS], [TRIGGERS]。禁止建議使用其他類型。\n"
+                "3. **資料結構**：必須符合 JSON 格式。禁止要求規格外(如 rationale)的欄位。\n\n"
+                "### 審核重點：\n"
+                "- **邏輯合理性**：例如兩個 ENTITY 之間不應使用 TRIGGERS (通常是 EVENT 觸發另一件事)。\n"
+                "- **文本一致性**：是否有節點完全脫離原始文本的實證。\n"
+                "- **分類準確性**：在「現有五種類別」中，該節點是否選擇了最合適的一個？若否，請指明應更換為哪一個現有類別。\n\n"
+                "### 輸出格式 (JSON)：\n"
+                "- 'is_valid': 布林值。\n"
+                "- 'critique': 若不通過，請具體指出：哪個節點/關係錯誤、違反哪條規則、以及如何「在現有規格內」修正。"
             ),
             "default": (
-                "You are a strict Ontology Auditor. Your task is to validate the "
-                "logical and empirical integrity of the extracted graph data.\n"
-                "Return a JSON object with:\n"
-                "- 'is_valid': Boolean indicating if the data passes the audit.\n"
-                "- 'critique': String providing specific error descriptions and "
-                "refinement suggestions if validation fails."
+                "You are a Graph Schema Validator.\n"
+                "Your sole responsibility is to ensure the output from the Architect aligns STRICTLY with the predefined specification. Do NOT introduce new concepts.\n\n"
+                "### Audit Criteria (Strict):\n"
+                "1. **Node Types**: ONLY [EVENT], [INSIGHT], [OUTCOME], [BOUNDARY], [ENTITY]. Do NOT suggest others.\n"
+                "2. **Edge Types**: ONLY [REF], [VALIDATES], [CONSTRAINS], [TRIGGERS]. Do NOT suggest others.\n"
+                "3. **Structure**: Must be JSON. Do NOT demand extra fields (e.g., rationale).\n\n"
+                "### Audit Focus:\n"
+                "- **Logical Consistency**: e.g., ensure TRIGGERS connects appropriate node types (usually events).\n"
+                "- **Empirical Alignment**: Ensure no hallucinated nodes.\n"
+                "- **Categorical Best-fit**: If a node is misclassified, map it to the most suitable existing type from the allowed list.\n\n"
+                "### Output Format (JSON):\n"
+                "- 'is_valid': Boolean.\n"
+                "- 'critique': If failed, specify: which node/edge is wrong, which rule was violated, and how to fix it WITHIN the existing spec."
             )
         }
+
+    def postprocess_llm_output(self, output_string: str) -> Any:
+        return json.dumps(json.loads(output_string.replace('```json', '').replace('```', '').strip()), ensure_ascii=False)
 
 
 class GraphSynthesistAgent(BaseAgent):

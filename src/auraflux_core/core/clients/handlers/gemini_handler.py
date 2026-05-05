@@ -102,7 +102,9 @@ class GeminiHandler(BaseHandler):
         tools = []
         if request.tools is not None:
             tools = [
-                ToolSpecConverter.to_gemini(tool) for tool in request.tools
+                types.Tool(function_declarations=[
+                    ToolSpecConverter.to_gemini(tool) for tool in request.tools
+                ])
             ]
 
         return types.GenerateContentConfig(
@@ -110,6 +112,7 @@ class GeminiHandler(BaseHandler):
             max_output_tokens=request.max_tokens,
             temperature=request.temperature,
             top_p=request.top_p,
+            thinking_config=types.ThinkingConfig(thinking_level=getattr(types.ThinkingLevel, request.thinking_level.upper()) if request.thinking_level else None),
             tools=tools,
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.AUTO)

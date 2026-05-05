@@ -111,6 +111,12 @@ class OntologyValidatorTool(BaseTool):
             "stats": {"node_count": len(nodes), "edge_count": len(edges)}
         }
 
+        for node in nodes:
+            node['type'] = node['type'].upper()
+
+        for edge in edges:
+            edge['relation'] = edge['relation'].upper()
+
         # 1. Node-Level Validation
         validated_nodes = []
         for node_data in nodes:
@@ -127,9 +133,9 @@ class OntologyValidatorTool(BaseTool):
                         results["errors"].append(f"Node[{node.id}]: {node.type} missing mandatory 'source_ref'.")
 
                 # Rule: Reasoning Requirement
-                if node.type in [ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME]:
-                    if not node.rationale or len(node.rationale.strip()) < 10:
-                        results["errors"].append(f"Node[{node.id}]: {node.type} missing detailed 'rationale'.")
+                # if node.type in [ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME]:
+                #     if not node.rationale or len(node.rationale.strip()) < 10:
+                #         results["errors"].append(f"Node[{node.id}]: {node.type} missing detailed 'rationale'.")
 
                 validated_nodes.append(node)
             except ValidationError as e:

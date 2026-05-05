@@ -78,6 +78,7 @@ class BaseAgent(ABC):
                 system_message=self.system_message,
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
+                thinking_level=self.config.thinking_level,
             )
 
             self.logger.debug(f"Sending request to LLM: {request}")
@@ -152,6 +153,7 @@ class BaseAgent(ABC):
                 model=self.model,
                 messages=messages,
                 system_message=tool_message,
+                thinking_level=self.config.thinking_level
             )
             self.logger.debug(f"Sending request to LLM: {request}")
             response: LLMResponse = await self.client_manager.generate(request)
@@ -164,6 +166,7 @@ class BaseAgent(ABC):
                 model=self.model,
                 messages=messages,
                 system_message=self.system_message,
+                thinking_level=self.config.thinking_level,
                 tools=[t for t in tool_map.values()]
             )
             response: LLMResponse = await self.client_manager.generate(request)

@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, NonNegativeInt
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.tools.base_tool import BaseTool
@@ -18,6 +18,8 @@ class LLMRequest(BaseModel):
     temperature (float): The sampling temperature.
     top_p (float): The nucleus sampling parameter.
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     max_tokens: NonNegativeInt = 4096
     messages: List[Message]
     provider: str
@@ -25,7 +27,8 @@ class LLMRequest(BaseModel):
     system_message: str = Field(default='You are a helpful AI Assistant.')
     temperature: float = 0.7
     top_p: float = 0.95
-    tools: Optional[List[BaseTool]] = None
+    thinking_level: Literal['minimal', 'low', 'medium', 'high'] = 'low'
+    tools: Optional[List["BaseTool"]] = Field(default=None)
 
     # Non-standard field required by our infrastructure for structured output.
     # Pydantic allows us to explicitly define this alongside standard params.
