@@ -23,7 +23,7 @@ class AgentConfig(BaseModel):
     lang: str = 'en'
     system_message: str | None = None
 
-    thinking_level: Literal['minimal', 'low', 'medium', 'high'] = 'low'
+    thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
 
     tools: List["BaseTool"] = []
     tool_configs: Dict[str, Any] = {}

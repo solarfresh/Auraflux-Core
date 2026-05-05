@@ -128,9 +128,9 @@ class OntologyValidatorTool(BaseTool):
                     results["errors"].append(f"Node[{node.id}]: Spatial data (position) found in Phase 1.")
 
                 # Rule: Empirical Grounding (Zero-Inference)
-                if node.type in [ConceptualNodeType.EVENT, ConceptualNodeType.RESOURCE]:
-                    if not node.source_ref or len(node.source_ref.strip()) < 3:
-                        results["errors"].append(f"Node[{node.id}]: {node.type} missing mandatory 'source_ref'.")
+                # if node.type in [ConceptualNodeType.EVENT, ConceptualNodeType.RESOURCE]:
+                #     if not node.source_ref or len(node.source_ref.strip()) < 3:
+                #         results["errors"].append(f"Node[{node.id}]: {node.type} missing mandatory 'source_ref'.")
 
                 # Rule: Reasoning Requirement
                 # if node.type in [ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME]:

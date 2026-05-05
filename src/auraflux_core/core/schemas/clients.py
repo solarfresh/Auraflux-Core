@@ -27,7 +27,7 @@ class LLMRequest(BaseModel):
     system_message: str = Field(default='You are a helpful AI Assistant.')
     temperature: float = 0.7
     top_p: float = 0.95
-    thinking_level: Literal['minimal', 'low', 'medium', 'high'] = 'low'
+    thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
     tools: Optional[List["BaseTool"]] = Field(default=None)
 
     # Non-standard field required by our infrastructure for structured output.

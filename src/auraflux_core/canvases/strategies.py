@@ -34,6 +34,10 @@ class AgenticStrategy(OrchestrationStrategy):
 
         for unit in units:
             # Initial User request with name 'User'
+            unit_id = unit.get("source_id") or unit.get("id")
+            state.current_unit_id = unit_id
+            self.logger.info(f"Processing Unit [{unit_id}]: Initiating knowledge extraction.")
+
             messages = [
                 Message(role="user", content=f"Extract: {unit['content']}", name="User")
             ]
@@ -47,8 +51,6 @@ class AgenticStrategy(OrchestrationStrategy):
                     messages=messages,
                 )
                 output_json = json.loads(output.content)
-                self.logger.info('====== output ======')
-                self.logger.info(output)
 
                 valid_res = await self.dispatch(
                     state,
@@ -66,7 +68,7 @@ class AgenticStrategy(OrchestrationStrategy):
                 audit_res_json = json.loads(audit_res.content)
 
                 if valid_res.get("is_valid") and audit_res_json.get("is_valid"):
-                    state.output["final_graph"] = output.content
+                    processed_results.append(output)
                     break
 
                 # Prepare Refinement
@@ -78,7 +80,7 @@ class AgenticStrategy(OrchestrationStrategy):
                         Message(role="assistant", content=str(output), name=self.actor_name)
                     )
                     # We record the auditor's critique with its name
-                    critique_combined = f"Tool Errors: {audit_res_json.get('errors')}\nAuditor Critique: {audit_res_json.get('critique')}"
+                    critique_combined = f"Tool Errors: {valid_res.get('errors')}\nAuditor Critique: {audit_res_json.get('critique')}"
                     messages.append(
                         Message(role="user", content=critique_combined, name=self.auditor_name)
                     )

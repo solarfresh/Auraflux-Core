@@ -1,9 +1,9 @@
 import asyncio
 import threading
+import time
 from asyncio import Future, Queue, Task
 from concurrent.futures import Future as ThreadFuture
-from typing import Dict, Generator, Any
-import time
+from typing import Any, Dict, Generator
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.clients.handlers.gemini_handler import GeminiHandler

@@ -107,12 +107,16 @@ class GeminiHandler(BaseHandler):
                 ])
             ]
 
+        thinking_config = None
+        if request.thinking_level is not None:
+            thinking_config = types.ThinkingConfig(thinking_level=getattr(types.ThinkingLevel, request.thinking_level.upper()) if request.thinking_level else None)
+
         return types.GenerateContentConfig(
             system_instruction=request.system_message,
             max_output_tokens=request.max_tokens,
             temperature=request.temperature,
             top_p=request.top_p,
-            thinking_config=types.ThinkingConfig(thinking_level=getattr(types.ThinkingLevel, request.thinking_level.upper()) if request.thinking_level else None),
+            thinking_config=thinking_config,
             tools=tools,
             tool_config=types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.AUTO)
