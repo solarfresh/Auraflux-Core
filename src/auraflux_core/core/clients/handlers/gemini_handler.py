@@ -99,13 +99,17 @@ class GeminiHandler(BaseHandler):
         }
 
     def _generate_content_config(self, request: LLMRequest) -> types.GenerateContentConfig:
-        tools = []
+        tools = None
+        tool_config = None
         if request.tools is not None:
             tools = [
                 types.Tool(function_declarations=[
                     ToolSpecConverter.to_gemini(tool) for tool in request.tools
                 ])
             ]
+            tool_config = types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.AUTO)
+            )
 
         thinking_config = None
         if request.thinking_level is not None:
@@ -118,7 +122,5 @@ class GeminiHandler(BaseHandler):
             top_p=request.top_p,
             thinking_config=thinking_config,
             tools=tools,
-            tool_config=types.ToolConfig(
-                function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.AUTO)
-            ),
+            tool_config=tool_config,
         )
