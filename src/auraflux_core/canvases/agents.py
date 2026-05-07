@@ -125,6 +125,7 @@ class OntologyAuditor(BaseAgent):
         # 1. Deep copy to avoid mutating original history
         copied_messages = [deepcopy(msg) for msg in messages[-self.config.turn_limit:]]
 
+        semantic_report = "Structural diagnostics not executed."
         if self.config.tool_execution_strategy == 'REFLECTIVE':
             # 2. Force tool call to get raw metrics
             tool_message = await self.generate_tool_message(copied_messages, tool_args_map)
@@ -149,7 +150,7 @@ class OntologyAuditor(BaseAgent):
 
         response = await self.generate_llm_message([copied_messages[-1]])
         response.metadata = {
-            "diagnostic_conclusion": self._translate_structural_metrics(semantic_report) # A simplified string
+            "diagnostic_conclusion": semantic_report
         }
 
         # 5. Final LLM generation
