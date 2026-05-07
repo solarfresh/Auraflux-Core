@@ -27,7 +27,7 @@ class AgentConfig(BaseModel):
 
     tools: List["BaseTool"] = []
     tool_configs: Dict[str, Any] = {}
-    tool_call_protocol: Literal['NATIVE', 'PROMPT'] = 'NATIVE'
+    tool_call_protocol: Literal['NATIVE', 'PROMPT', 'FORCE'] = 'NATIVE'
     tool_execution_strategy: Literal['NONE', 'DIRECT', 'REFLECTIVE'] = 'NONE'
 
     cot_message: str | None = None

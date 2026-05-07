@@ -25,6 +25,13 @@ class ToolCallProtocol(Enum):
     constrained decoding for higher reliability and structured finish reasons.
     """
 
+    FORCE = "FORCE"
+    """
+    Enforced tool call mode.
+    The agent determines the tool call parameters internally and bypasses the LLM's output parsing.
+    This is used when the tool call can be determined with high confidence
+    """
+
 
 class ToolExecutionStrategy(Enum):
     """

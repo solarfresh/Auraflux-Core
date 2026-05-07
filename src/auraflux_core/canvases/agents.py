@@ -1,8 +1,10 @@
 import json
 import re
-from typing import Any, Dict
+from copy import deepcopy
+from typing import Any, Dict, List
 
 from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.tools.base_tool import BaseTool
 
 
@@ -66,39 +68,161 @@ class OntologyAuditor(BaseAgent):
     def get_system_message_map(self) -> Dict[str, str]:
         return {
             "zh": (
-                "你是一位「圖譜規格審計員」(Graph Schema Validator)。\n"
-                "你的唯一職責是確保【架構師】輸出的資料「完全符合既定規格」，嚴禁引入規格外的概念。\n\n"
-                "### 審核基準 (嚴格遵守)：\n"
-                "1. **節點類型 (Nodes)**：僅限 [EVENT], [INSIGHT], [OUTCOME], [BOUNDARY], [ENTITY]。禁止建議使用其他類型。\n"
-                "2. **關係類型 (Edges)**：僅限 [REF], [VALIDATES], [CONSTRAINS], [TRIGGERS]。禁止建議使用其他類型。\n"
-                "3. **資料結構**：必須符合 JSON 格式。禁止要求規格外(如 rationale)的欄位。\n\n"
-                "### 審核重點：\n"
-                "- **邏輯合理性**：例如兩個 ENTITY 之間不應使用 TRIGGERS (通常是 EVENT 觸發另一件事)。\n"
-                "- **文本一致性**：是否有節點完全脫離原始文本的實證。\n"
-                "- **分類準確性**：在「現有五種類別」中，該節點是否選擇了最合適的一個？若否，請指明應更換為哪一個現有類別。\n\n"
+                "你是一位「圖譜規格與邏輯審計員」(Graph Schema & Logic Auditor)。\n"
+                "你的職責是確保【架構師】輸出的資料「完全符合既定規格」，並進行嚴格的邏輯配對審查。結構診斷數據僅作為全域參考，不代表局部邏輯的合法性。\n\n"
+                "### 1. 嚴格規格基準 (優先權最高)：\n"
+                "1. **節點類型 (Nodes)**：僅限 [EVENT], [INSIGHT], [OUTCOME], [BOUNDARY], [ENTITY]。\n"
+                "2. **關係類型 (Edges)**：僅限 [REF], [VALIDATES], [CONSTRAINS], [TRIGGERS]。\n"
+                "3. **嚴禁引入**：任何規格外的標籤、概念或 JSON 欄位 (如 rationale)。\n\n"
+                "### 2. 深度邏輯審核點 (不可忽略)：\n"
+                "- **關係配對邏輯**：審視每一條邊的語義。例如：\n"
+                "  * [ENTITY] 之間通常使用 [REF]，不應直接使用 [TRIGGERS] (通常由 EVENT 觸發)。\n"
+                "  * [VALIDATES] 應連接實證數據與 [INSIGHT] 或 [OUTCOME]。\n"
+                "- **標籤歸一化**：在 Top Hubs 或節點清單中，若發現語義重疊 (如「微軟」與「Microsoft」)，必須要求合併以避免概念稀釋。\n"
+                "- **分類準確性**：節點是否被歸類在最合適的類型？(例如：一個具體動作應是 EVENT 而非 ENTITY)。\n\n"
+                "### 3. 結構診斷數據的解讀原則：\n"
+                "- **Isolation Rate 僅代表密度**：即便顯示健康 (HEALTHY)，你仍需執行上述「深度邏輯審核」。\n"
+                "- **高孤島率處理**：若數據顯示為碎片化，你必須在 Critique 中指出邏輯斷裂點，要求增加合理的因果連結。\n\n"
+                "### 4. 審核反饋原則：\n"
+                "- **拒絕模稜兩可**：若邏輯有瑕疵，即便 JSON 格式正確，也必須設定 'is_valid': false。\n"
+                "- **實證導向**：所有修正建議必須基於原始文本，嚴禁幻想不存在的實體。\n\n"
                 "### 輸出格式 (JSON)：\n"
                 "- 'is_valid': 布林值。\n"
-                "- 'critique': 若不通過，請具體指出：哪個節點/關係錯誤、違反哪條規則、以及如何「在現有規格內」修正。"
+                "- 'critique': 若不通過，請具體指出：\n"
+                "  a) 違反的規格或邏輯配對細節。\n"
+                "  b) 結構性問題 (如標籤合併、連通性優化方向)。\n"
+                "  c) 具體的修正建議。"
             ),
             "default": (
-                "You are a Graph Schema Validator.\n"
-                "Your sole responsibility is to ensure the output from the Architect aligns STRICTLY with the predefined specification. Do NOT introduce new concepts.\n\n"
-                "### Audit Criteria (Strict):\n"
-                "1. **Node Types**: ONLY [EVENT], [INSIGHT], [OUTCOME], [BOUNDARY], [ENTITY]. Do NOT suggest others.\n"
-                "2. **Edge Types**: ONLY [REF], [VALIDATES], [CONSTRAINS], [TRIGGERS]. Do NOT suggest others.\n"
-                "3. **Structure**: Must be JSON. Do NOT demand extra fields (e.g., rationale).\n\n"
-                "### Audit Focus:\n"
-                "- **Logical Consistency**: e.g., ensure TRIGGERS connects appropriate node types (usually events).\n"
-                "- **Empirical Alignment**: Ensure no hallucinated nodes.\n"
-                "- **Categorical Best-fit**: If a node is misclassified, map it to the most suitable existing type from the allowed list.\n\n"
+                "You are a Graph Schema & Logic Auditor.\n"
+                "Your role is to ensure the Architect's output STRICTLY aligns with predefined specs and to perform rigorous logical pairing audits. Structural stats are background context only and do not imply local validity.\n\n"
+                "### 1. Strict Specification Criteria (Highest Priority):\n"
+                "1. **Node Types**: ONLY [EVENT], [INSIGHT], [OUTCOME], [BOUNDARY], [ENTITY].\n"
+                "2. **Edge Types**: ONLY [REF], [VALIDATES], [CONSTRAINS], [TRIGGERS].\n"
+                "3. **No Extra Fields**: Strictly JSON, no 'rationale' or external concepts allowed.\n\n"
+                "### 2. Deep Logical Audit Focus (Mandatory):\n"
+                "- **Edge Pairing Logic**: Verify semantic pairs. For example:\n"
+                "  * [ENTITY] to [ENTITY] should typically use [REF], NOT [TRIGGERS].\n"
+                "  * [VALIDATES] should connect evidence to [INSIGHT] or [OUTCOME].\n"
+                "- **Label Normalization**: Identify semantic overlaps (e.g., 'Microsoft' vs '微軟') in the node list and demand mergers.\n"
+                "- **Categorical Accuracy**: Ensure nodes are mapped to the most precise type (e.g., an action is an EVENT, not an ENTITY).\n\n"
+                "### 3. Interpreting Structural Stats:\n"
+                "- **Stats != Validity**: Even if connectivity is 'HEALTHY', you MUST still perform the Deep Logical Audit.\n"
+                "- **Fragmentation**: If metrics show high isolation, pinpoint logical gaps and demand causal links.\n\n"
+                "### 4. Feedback Principles:\n"
+                "- **No Compromise**: If logic is flawed, 'is_valid' MUST be false even if JSON is well-formed.\n"
+                "- **Grounded in Fact**: All suggestions must be supported by the source text; no hallucinations.\n\n"
                 "### Output Format (JSON):\n"
                 "- 'is_valid': Boolean.\n"
-                "- 'critique': If failed, specify: which node/edge is wrong, which rule was violated, and how to fix it WITHIN the existing spec."
+                "- 'critique': If failed, specify:\n"
+                "  a) Specific rule or logical pairing violations.\n"
+                "  b) Structural issues (e.g., label mergers, connectivity directions).\n"
+                "  c) Clear instructions for correction."
             )
         }
 
+    async def generate(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
+        # 1. Deep copy to avoid mutating original history
+        copied_messages = [deepcopy(msg) for msg in messages[-self.config.turn_limit:]]
+
+        if self.config.tool_execution_strategy == 'REFLECTIVE':
+            # 2. Force tool call to get raw metrics
+            tool_message = await self.generate_tool_message(copied_messages, tool_args_map)
+
+            # 3. Translate metrics to semantic report
+            semantic_report = self._translate_structural_metrics(tool_message.content)
+
+            # 4. Integrate report into the LAST user message to maintain assistant-user sequence
+            # This ensures the LLM sees the diagnostic as part of the context it needs to respond to.
+            if copied_messages and copied_messages[-1].role == 'user':
+                original_content = copied_messages[-1].content
+                copied_messages[-1].content = (
+                    f"--- STRUCTURAL DIAGNOSTIC REPORT ---\n"
+                    f"{semantic_report}\n"
+                    f"-------------------------------------\n\n"
+                    f"Please perform the audit based on the context above:\n"
+                    f"{original_content}"
+                )
+            else:
+                # Fallback: if last message isn't from user, append a new user context
+                copied_messages.append(Message(role='user', content=semantic_report, name="System_Diagnostic"))
+
+        response = await self.generate_llm_message([copied_messages[-1]])
+        response.metadata = {
+            "diagnostic_conclusion": self._translate_structural_metrics(semantic_report) # A simplified string
+        }
+
+        # 5. Final LLM generation
+        return response
+
     def postprocess_llm_output(self, output_string: str) -> Any:
         return json.dumps(json.loads(output_string.replace('```json', '').replace('```', '').strip()), ensure_ascii=False)
+
+    def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
+        """
+        Forces the agent to call the GraphIsolationRateTool.
+        This bypasses LLM decision-making to ensure structural data is always available.
+        """
+        # The tool name should match the key in your get_tool_map()
+        tool_name = "graph_isolation_rate_analyzer"
+        if self._tool_cache is None or tool_name not in self._tool_cache:
+            self.logger.error(f"Tool '{tool_name}' not found in tool map for agent '{self.name}'. Ensure it is defined in get_tool_map().")
+            raise ValueError(f"Tool '{tool_name}' not available.")
+
+        graph_json = json.loads(messages[-2].content)
+        return {
+            "tool": tool_name,
+            "args": {
+                "nodes": graph_json.get('nodes', []),
+                "edges": graph_json.get('edges', [])
+            }
+        }
+
+    def _translate_structural_metrics(self, tool_output: str) -> str:
+            """
+            Translates raw metrics into a structured context for the Auditor.
+            This version avoids giving 'pass/fail' conclusions to prevent anchoring bias,
+            ensuring the Agent still performs rigorous logic checks.
+            """
+            try:
+                # Parse the tool's raw JSON output
+                data = json.loads(tool_output)
+                iso_rate = data.get("isolation_rate", 0)
+
+                # Define thresholds and semantic status
+                if iso_rate > 0.03:
+                    status = "CRITICAL_FRAGMENTATION"
+                    # For high isolation, we push for connectivity but maintain logic
+                    context_advice = (
+                        "High isolation detected. While validating schema, look for missing "
+                        "logical bridges. Priority: Connect isolated components using valid types."
+                    )
+                elif iso_rate > 0.01:
+                    status = "MILD_FRAGMENTATION"
+                    context_advice = "Connectivity is stable. Focus on logical precision and entity alignment."
+                else:
+                    status = "OPTIMIZED_CONNECTIVITY"
+                    # IMPORTANT: We no longer say 'No changes required'.
+                    # We refocus the Agent on the micro-level logic audit.
+                    context_advice = (
+                        "Global connectivity is healthy. You MUST now perform a deep-dive "
+                        "audit on local logic (e.g., Node-Edge type pairing and semantic accuracy)."
+                    )
+
+                # Assemble the report with clear boundaries
+                return (
+                    f"### [STRUCTURAL CONTEXT DATA]\n"
+                    f"- Global Status: {status}\n"
+                    f"- Isolation Rate: {iso_rate:.2%}\n"
+                    f"- Contextual Guidance: {context_advice}\n"
+                    f"-------------------------------------\n"
+                    f"NOTE: The data above only reflects structural density. You are still "
+                    f"REQUIRED to enforce strict schema rules and logical consistency."
+                )
+
+            except Exception as e:
+                self.logger.error(f"Error translating structural metrics: {e}")
+                return f"### [STRUCTURAL CONTEXT DATA]\nWarning: Metrics unavailable. Proceed with standard audit."
 
 
 class GraphSynthesistAgent(BaseAgent):

@@ -123,7 +123,10 @@ class BaseAgent(ABC):
 
     def get_tool_map(self) -> Dict[str, BaseTool]:
         if not self._tool_cache:
-            raise ValueError(f"No tools configured for {self.name}. Please check the agent configuration.")
+            if len(self.config.tools):
+                self._tool_cache = {tool.get_name(): tool for tool in self.config.tools}
+            else:
+                raise ValueError(f"No tools configured for {self.name}. Please check the agent configuration.")
 
         return self._tool_cache
 
@@ -147,7 +150,12 @@ class BaseAgent(ABC):
     async def _decide_tool_calls(self, messages: List[Message]) -> Dict[str, Any]:
         tool_call_data = {}
         tool_message = self._message_mapper(self.get_tool_message_map())
-        if tool_message is not None:
+        tool_map = self.get_tool_map()
+        if self.config.tool_call_protocol == ToolCallProtocol.PROMPT.value:
+            if tool_message is None:
+                self.logger.warning(f"Tool call protocol is set to PROMPT but no tool message is defined for agent '{self.name}'. Proceeding without tool call.")
+                return {}
+
             request = LLMRequest(
                 provider=self.provider,
                 model=self.model,
@@ -160,7 +168,6 @@ class BaseAgent(ABC):
             self.logger.debug(f"Received response from LLM: {response}")
             tool_call_data = self.postprocess_tool_output(response.text)
         elif self.config.tool_call_protocol == ToolCallProtocol.NATIVE.value:
-            tool_map = self.get_tool_map()
             request = LLMRequest(
                 provider=self.provider,
                 model=self.model,
@@ -196,6 +203,14 @@ class BaseAgent(ABC):
         try:
             self.logger.debug(f"Executing tool '{tool_name}' with args: {tool_call_args}")
             tool_output = await tool.run(**tool_call_args)
+
+            if isinstance(tool_output, str):
+                pass
+            elif isinstance(tool_output, dict):
+                tool_output = json.dumps(tool_output, ensure_ascii=False)
+            else:
+                raise ValueError(f"Unsupported tool output type: {type(tool_output)}. Expected str or dict.")
+
             return Message(role='assistant', content=tool_output, name=self.name)
         except Exception as e:
             self.logger.error(f"Error executing tool '{tool_name}': {e}")
