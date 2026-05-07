@@ -1,6 +1,7 @@
 import copy
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from collections import Counter
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
 from pydantic import ValidationError
@@ -11,6 +12,320 @@ from auraflux_core.canvases.schemas import (ConceptualEdge, ConceptualEdgeType,
                                             NodeHandle, Position,
                                             SpatialLocateToolConfig)
 from auraflux_core.core.tools.base_tool import BaseTool
+
+
+class CentralityPowerShiftTool(BaseTool):
+    """
+    Optimized Centrality and Power Shift tool using NetworkX.
+    Analyzes 'Degree' (popularity) and 'Betweenness' (control) to detect
+    structural narrative shifts between two graph versions.
+    """
+
+    async def run(
+        self,
+        base_nodes: List[Dict[str, Any]],
+        base_edges: List[Dict[str, Any]],
+        target_nodes: List[Dict[str, Any]],
+        target_edges: List[Dict[str, Any]],
+        top_k: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Identifies key hubs and measures shifts in structural influence.
+        """
+        self.logger.info(f"Analyzing Narrative Power Shifts (Top-{top_k}) with NetworkX.")
+
+        def analyze_hubs(nodes, edges):
+            G = nx.Graph()
+            G.add_nodes_from([str(n.get("id")) for n in nodes])
+            G.add_edges_from([(str(e.get("source")), str(e.get("target"))) for e in edges])
+
+            if G.number_of_nodes() < 2:
+                return [], {}
+
+            degree_centrality = nx.degree_centrality(G)
+
+            betweenness_centrality = nx.betweenness_centrality(G)
+
+            id_to_label = {str(n.get("id")): n.get("label", n.get("id")) for n in nodes}
+
+            combined_metrics = []
+            for node_id in G.nodes():
+                combined_metrics.append({
+                    "id": node_id,
+                    "label": id_to_label.get(node_id),
+                    "degree_score": round(degree_centrality.get(node_id, 0), 4),
+                    "betweenness_score": round(betweenness_centrality.get(node_id, 0), 4)
+                })
+
+            top_hubs = sorted(combined_metrics, key=lambda x: x["degree_score"], reverse=True)[:top_k]
+            return top_hubs, degree_centrality
+
+        base_hubs, base_raw = analyze_hubs(base_nodes, base_edges)
+        target_hubs, target_raw = analyze_hubs(target_nodes, target_edges)
+
+        base_hub_ids = {h["id"] for h in base_hubs}
+        target_hub_ids = {h["id"] for h in target_hubs}
+
+        hub_consensus = (
+            len(base_hub_ids.intersection(target_hub_ids)) / len(base_hub_ids.union(target_hub_ids))
+            if base_hub_ids or target_hub_ids else 1.0
+        )
+
+        significant_gains = []
+        for h in target_hubs:
+            if h["id"] not in base_hub_ids:
+                significant_gains.append(h)
+
+        self.logger.info("Centrality analysis complete.")
+
+        return {
+            "metrics": {
+                "hub_consensus_score": round(hub_consensus, 4),
+                "is_narrative_drifted": hub_consensus < 0.6,
+                "base_top_hubs": base_hubs,
+                "target_top_hubs": target_hubs
+            },
+            "shift_analysis": {
+                "power_gained_nodes": significant_gains,
+                "power_lost_node_ids": list(base_hub_ids - target_hub_ids)
+            }
+        }
+
+    def get_name(self) -> str:
+        return "centrality_power_shift_analyzer"
+
+    def get_description(self) -> str:
+        return (
+            "Uses NetworkX to identify structural 'Hubs' and 'Bridges' in the graph. "
+            "It measures narrative focus by comparing which entities hold the most "
+            "topological power (Degree and Betweenness Centrality) between two versions."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "base_nodes": {"type": "array", "items": {"type": "object"}},
+                "base_edges": {"type": "array", "items": {"type": "object"}},
+                "target_nodes": {"type": "array", "items": {"type": "object"}},
+                "target_edges": {"type": "array", "items": {"type": "object"}},
+                "top_k": {"type": "integer", "default": 5}
+            },
+            "required": ["base_nodes", "base_edges", "target_nodes", "target_edges"]
+        }
+
+
+class EntityAlignmentCoverageTool(BaseTool):
+    """
+    Optimized Entity Alignment tool using NetworkX.
+    Beyond simple ID matching, it evaluates 'Neighborhood Similarity'
+    to detect if aligned entities share the same structural context.
+    """
+
+    async def run(
+        self,
+        base_nodes: List[Dict[str, Any]],
+        base_edges: List[Dict[str, Any]],
+        target_nodes: List[Dict[str, Any]],
+        target_edges: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Compares nodes and their local topological structures.
+        """
+        self.logger.info("Performing Structural Entity Alignment with NetworkX.")
+
+        # 1. Build Graphs
+        def build_graph(nodes, edges):
+            g = nx.DiGraph()
+            # Store all attributes in the node for easy access
+            for n in nodes:
+                node_id = str(n.get("id"))
+                g.add_node(node_id, **n)
+            for e in edges:
+                g.add_edge(str(e.get("source")), str(e.get("target")), type=e.get("type"))
+            return g
+
+        g_base = build_graph(base_nodes, base_edges)
+        g_target = build_graph(target_nodes, target_edges)
+
+        base_ids = set(g_base.nodes())
+        target_ids = set(g_target.nodes())
+        shared_ids = base_ids.intersection(target_ids)
+
+        # 2. Analyze Neighborhood Similarity (Structural Context)
+        # We check if the neighbors of a shared node are also shared
+        context_shifts = []
+        for node_id in shared_ids:
+            # Get immediate neighbors (out-edges)
+            base_neighbors = set(g_base.successors(node_id))
+            target_neighbors = set(g_target.successors(node_id))
+
+            # Calculate Jaccard similarity of the node's local environment
+            union_neighbors = base_neighbors.union(target_neighbors)
+            neighbor_sim = (
+                len(base_neighbors.intersection(target_neighbors)) / len(union_neighbors)
+                if union_neighbors else 1.0
+            )
+
+            if neighbor_sim < 1.0:
+                context_shifts.append({
+                    "id": node_id,
+                    "neighbor_similarity": round(neighbor_sim, 4),
+                    "base_only_neighbors": list(base_neighbors - target_neighbors),
+                    "target_only_neighbors": list(target_neighbors - base_neighbors)
+                })
+
+        # 3. Basic Attribute Coverage (using Graph node data)
+        type_conflicts = []
+        for node_id in shared_ids:
+            b_type = str(g_base.nodes[node_id].get("type", "")).upper()
+            t_type = str(g_target.nodes[node_id].get("type", "")).upper()
+            if b_type != t_type:
+                type_conflicts.append({"id": node_id, "base": b_type, "target": t_type})
+
+        # 4. Metrics Calculation
+        jaccard_sim = len(shared_ids) / len(base_ids.union(target_ids)) if base_ids or target_ids else 1.0
+        recall = len(shared_ids) / len(base_ids) if base_ids else 1.0
+
+        # Average structural stability of aligned nodes
+        avg_neighbor_sim = (
+            sum(c['neighbor_similarity'] for c in context_shifts) + (len(shared_ids) - len(context_shifts))
+        ) / len(shared_ids) if shared_ids else 1.0
+
+        return {
+            "alignment_metrics": {
+                "id_jaccard_similarity": round(jaccard_sim, 4),
+                "recall_rate": round(recall, 4),
+                "structural_stability_score": round(avg_neighbor_sim, 4),
+                "unique_discovery_count": len(target_ids - base_ids)
+            },
+            "consistency_analysis": {
+                "type_conflicts": type_conflicts,
+                "context_shifts": sorted(context_shifts, key=lambda x: x['neighbor_similarity'])[:5] # Show top 5 shifts
+            },
+            "discovery_details": {
+                "missing_from_target": list(base_ids - target_ids),
+                "unique_to_target": list(target_ids - base_ids)
+            }
+        }
+
+    def get_name(self) -> str:
+        return "entity_alignment_coverage_analyzer"
+
+    def get_description(self) -> str:
+        return (
+            "Optimized entity alignment tool using NetworkX. It measures ID overlap, "
+            "attribute consistency, and 'Structural Stability'—detecting if an entity's "
+            "logical surroundings have changed between two graph versions."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "base_nodes": {"type": "array", "items": {"type": "object"}},
+                "base_edges": {"type": "array", "items": {"type": "object"}},
+                "target_nodes": {"type": "array", "items": {"type": "object"}},
+                "target_edges": {"type": "array", "items": {"type": "object"}}
+            },
+            "required": ["base_nodes", "base_edges", "target_nodes", "target_edges"]
+        }
+
+
+class GraphIsolationRateTool(BaseTool):
+    """
+    Calculates the Isolation Rate of a knowledge graph.
+    The isolation rate is defined as the number of nodes with no connected edges
+    divided by the total number of nodes. High isolation indicates fragmented knowledge.
+    """
+
+    async def run(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Executes the isolation rate calculation.
+
+        Args:
+            nodes: A list of node dictionaries (must contain 'id').
+            edges: A list of edge dictionaries (must contain 'source' and 'target').
+
+        Returns:
+            A dictionary containing the isolation_rate and the list of isolated_node_ids.
+        """
+        self.logger.info(f"Analyzing Isolation Rate for graph with {len(nodes)} nodes.")
+
+        if not nodes:
+            return {
+                "isolation_rate": 0.0,
+                "isolated_nodes": [],
+                "total_nodes": 0,
+                "message": "Graph is empty."
+            }
+
+        G = nx.Graph()
+        node_ids = [str(n.get("id")) for n in nodes if n.get("id")]
+        G.add_nodes_from(node_ids)
+
+        edge_tuples = [(str(e.get("source")), str(e.get("target")))
+                       for e in edges if e.get("source") and e.get("target")]
+        G.add_edges_from(edge_tuples)
+
+        isolated_nodes = list(nx.isolates(G))
+
+        # Step 3: Calculate the rate
+        total_nodes = G.number_of_nodes()
+        isolated_count = len(isolated_nodes)
+        isolation_rate = isolated_count / total_nodes if total_nodes > 0 else 0.0
+
+        self.logger.info(f"Calculation complete. Isolated nodes found: {isolated_count}")
+
+        return {
+            "isolation_rate": round(isolation_rate, 4),
+            "isolated_nodes": isolated_nodes,
+            "total_nodes": total_nodes,
+            "connected_nodes_count": total_nodes - isolated_count
+        }
+
+    def get_name(self) -> str:
+        return "graph_isolation_rate_analyzer"
+
+    def get_description(self) -> str:
+        return (
+            "Computes the ratio of isolated nodes in a graph. "
+            "An isolated node is one that has no incoming or outgoing edges. "
+            "This metric helps evaluate the connectivity and coherence of the extracted knowledge."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "array",
+                    "description": "List of node objects extracted from the text.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "label": {"type": "string"}
+                        },
+                        "required": ["id"]
+                    }
+                },
+                "edges": {
+                    "type": "array",
+                    "description": "List of edge objects defining relationships between nodes.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source": {"type": "string"},
+                            "target": {"type": "string"},
+                            "relation": {"type": "string"}
+                        },
+                        "required": ["source", "target"]
+                    }
+                }
+            },
+            "required": ["nodes", "edges"]
+        }
 
 
 class GraphSerializerTool(BaseTool):
@@ -92,6 +407,87 @@ class GraphSerializerTool(BaseTool):
                 }
             },
             "required": ["nodes", "edges", "output_path"]
+        }
+
+
+class GraphTaxonomyDistributionTool(BaseTool):
+    """
+    Analyzes the distribution of node types within a knowledge graph.
+    This tool provides insights into the modeling bias of an agent—whether
+    it focuses more on static entities or dynamic insights and outcomes.
+    """
+
+    async def run(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Processes the nodes and calculates distribution statistics.
+
+        Args:
+            nodes: A list of node dictionaries, each containing a 'type' field.
+
+        Returns:
+            A dictionary containing type counts, percentages, and total count.
+        """
+        self.logger.info("Initiating Taxonomy Distribution analysis.")
+
+        if not nodes:
+            return {
+                "distribution": {},
+                "total_nodes": 0,
+                "dominant_type": None,
+                "message": "No nodes provided for analysis."
+            }
+
+        total_nodes = len(nodes)
+
+        # Count occurrences of each type (ensure case-insensitive comparison if needed)
+        type_counts = Counter(node.get("type", "UNKNOWN").upper() for node in nodes)
+
+        # Calculate percentages and build distribution report
+        distribution = {}
+        for node_type, count in type_counts.items():
+            distribution[node_type] = {
+                "count": count,
+                "percentage": round((count / total_nodes) * 100, 2)
+            }
+
+        # Identify the dominant node type
+        dominant_type = type_counts.most_common(1)[0][0] if type_counts else None
+
+        self.logger.info(f"Analysis complete. Total nodes: {total_nodes}. Dominant type: {dominant_type}")
+
+        return {
+            "total_nodes": total_nodes,
+            "dominant_type": dominant_type,
+            "distribution": distribution
+        }
+
+    def get_name(self) -> str:
+        return "graph_taxonomy_analyzer"
+
+    def get_description(self) -> str:
+        return (
+            "Analyzes the frequency and percentage of different node types in the graph. "
+            "Helpful for identifying if the graph is entity-heavy or insight-driven."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "nodes": {
+                    "type": "array",
+                    "description": "List of node objects with 'type' fields.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "type": {"type": "string"}
+                        },
+                        "required": ["type"]
+                    }
+                }
+            },
+            "required": ["nodes"]
         }
 
 
@@ -528,4 +924,135 @@ class SpatialLocateTool(BaseTool):
                 }
             },
             "required": ["expansion_data", "existing_graph_state"]
+        }
+
+
+class TripleStrengthComparisonTool(BaseTool):
+    """
+    Compares edge triples (Source, Relation, Target) between two graphs.
+    It evaluates logical agreement and analyzes "Relation Strength" shifts
+    (e.g., upgrading a weak reference to a strong causal trigger).
+    """
+
+    async def run(
+        self,
+        base_edges: List[Dict[str, Any]],
+        target_edges: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Executes the triple comparison.
+
+        Args:
+            base_edges: Reference list of edges (Baseline).
+            target_edges: List of edges to evaluate (Target).
+
+        Returns:
+            A report detailing exact matches, structural matches with relation shifts,
+            and strength distribution.
+        """
+        self.logger.info("Comparing Relation Triples and Strength.")
+
+        def build_graph(edges):
+            g = nx.MultiDiGraph()
+            for e in edges:
+                s, t, r = e.get("source"), e.get("target"), e.get("type")
+                if s and t and r:
+                    # Use the relation type as a key within the multi-edge
+                    g.add_edge(str(s), str(t), key=str(r).upper(), type=str(r).upper())
+            return g
+
+        g_base = build_graph(base_edges)
+        g_target = build_graph(target_edges)
+
+        base_triples = set(g_base.edges(keys=True))
+        target_triples = set(g_target.edges(keys=True))
+
+        exact_matches = base_triples.intersection(target_triples)
+        unique_base = base_triples - target_triples
+        unique_target = target_triples - base_triples
+
+        # 2. Strength Metrics
+        # Define Strong/Empirical relations directly from our Enum
+        # We exclude REF and LINK as they are 'Weak/Functional'
+        EMPIRICAL_TYPES = {
+            ConceptualEdgeType.VALIDATES.value,
+            ConceptualEdgeType.CONSTRAINS.value,
+            ConceptualEdgeType.TRIGGERS.value
+        }
+
+        def calc_empirical_rate(triple_set):
+            if not triple_set: return 0.0
+            empirical_count = sum(1 for _, _, rel in triple_set if rel in EMPIRICAL_TYPES)
+            return round(empirical_count / len(triple_set), 4)
+
+        base_pairs = {(s, t) for s, t, _ in base_triples}
+        target_pairs = {(s, t) for s, t, _ in target_triples}
+        shared_pairs = base_pairs.intersection(target_pairs)
+
+        shifts = []
+        for s, t in shared_pairs:
+            b_rels = {rel for src, tgt, rel in base_triples if src == s and tgt == t}
+            t_rels = {rel for src, tgt, rel in target_triples if src == s and tgt == t}
+            if b_rels != t_rels:
+                shifts.append({
+                    "pair": (s, t),
+                    "base_relations": list(b_rels),
+                    "target_relations": list(t_rels),
+                    "is_upgrade": any(r in EMPIRICAL_TYPES for r in t_rels) and not any(r in EMPIRICAL_TYPES for r in b_rels)
+                })
+
+        self.logger.info(f"Matched {len(exact_matches)} triples exactly.")
+
+        return {
+            "metrics": {
+                "exact_match_count": len(exact_matches),
+                "unique_target_triples": len(unique_target),
+                "unique_base_triples": len(unique_base),
+                "structural_pair_overlap_count": len(shared_pairs),
+                "relation_shift_count": len(shifts),
+                "base_empirical_density": calc_empirical_rate(base_triples),
+                "target_empirical_density": calc_empirical_rate(target_triples)
+            },
+            "structural_analysis": {
+                "upgraded_logic_shifts": [s for s in shifts if s["is_upgrade"]],
+                "matched_triples_sample": [list(t) for t in list(exact_matches)[:10]]
+            }
+        }
+
+    def get_name(self) -> str:
+        return "triple_strength_analyzer"
+
+    def get_description(self) -> str:
+        return (
+            "Analyzes the agreement of (Source, Relation, Target) triples between two graphs. "
+            "It specifically tracks 'relation shifts' where agents agree on a connection "
+            "but disagree on the logical intensity (e.g., Reference vs Trigger)."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        edge_schema = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string"},
+                    "target": {"type": "string"},
+                    "type": {"type": "string"}
+                },
+                "required": ["source", "target", "type"]
+            }
+        }
+        return {
+            "type": "object",
+            "properties": {
+                "base_edges": {
+                    "description": "The reference edges (Baseline).",
+                    **edge_schema
+                },
+                "target_edges": {
+                    "description": "The edges to evaluate (Target).",
+                    **edge_schema
+                }
+            },
+            "required": ["base_edges", "target_edges"]
         }

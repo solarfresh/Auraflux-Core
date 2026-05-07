@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Dict
 
 from auraflux_core.core.agents.base_agent import BaseAgent
@@ -50,7 +51,15 @@ class KnowledgeArchitect(BaseAgent):
         }
 
     def postprocess_llm_output(self, output_string: str) -> Any:
-        return json.dumps(json.loads(output_string.replace('```json', '').replace('```', '').strip()), ensure_ascii=False)
+        json_pattern = r"```json\s*(\{.*\})\s*```"
+        match = re.search(json_pattern, output_string, re.DOTALL)
+        if match:
+            json_string = match.group(1)
+        else:
+            self.logger.warning(output_string)
+            raise ValueError()
+
+        return json.dumps(json.loads(json_string), ensure_ascii=False)
 
 
 class OntologyAuditor(BaseAgent):
