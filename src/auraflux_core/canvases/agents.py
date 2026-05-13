@@ -53,15 +53,7 @@ class KnowledgeArchitect(BaseAgent):
         }
 
     def postprocess_llm_output(self, output_string: str) -> Any:
-        json_pattern = r"```json\s*(\{.*\})\s*```"
-        match = re.search(json_pattern, output_string, re.DOTALL)
-        if match:
-            json_string = match.group(1)
-        else:
-            self.logger.warning(output_string)
-            raise ValueError()
-
-        return json.dumps(json.loads(json_string), ensure_ascii=False)
+        return self._parse_json_output(output_string)
 
 
 class OntologyAuditor(BaseAgent):
@@ -85,13 +77,17 @@ class OntologyAuditor(BaseAgent):
                 "- **高孤島率處理**：若數據顯示為碎片化，你必須在 Critique 中指出邏輯斷裂點，要求增加合理的因果連結。\n\n"
                 "### 4. 審核反饋原則：\n"
                 "- **拒絕模稜兩可**：若邏輯有瑕疵，即便 JSON 格式正確，也必須設定 'is_valid': false。\n"
+                "- **嚴禁 LaTeX 與特殊轉義符號**：禁止使用反斜線 `\\`、字元 `$` 或任何 LaTeX 語法（如 `\\xrightarrow`）。這些符號會造成 JSON 解析崩潰。\n"
+                "- **統一關係描述格式**：描述節點關係時，請使用「純文字箭頭」表示。範例：(節點A) -> [關係] -> (節點B)。\n"
                 "- **實證導向**：所有修正建議必須基於原始文本，嚴禁幻想不存在的實體。\n\n"
                 "### 輸出格式 (JSON)：\n"
+                "- **必須確保輸出為標準 JSON，不含任何非法轉義序列。**\n"
                 "- 'is_valid': 布林值。\n"
-                "- 'critique': 若不通過，請具體指出：\n"
-                "  a) 違反的規格或邏輯配對細節。\n"
-                "  b) 結構性問題 (如標籤合併、連通性優化方向)。\n"
-                "  c) 具體的修正建議。"
+                "- 'critique': {\n"
+                "    'violation_details': '違反的規格或邏輯配對細節。',\n"
+                "    'structural_issues': '結構性問題 (如標籤合併、連通性優化方向)。',\n"
+                "    'correction_suggestions': '修正建議 (請統一使用 -> 描述關係，嚴禁使用反斜線與 LaTeX)。'\n"
+                "  }"
             ),
             "default": (
                 "You are a Graph Schema & Logic Auditor.\n"
@@ -111,13 +107,17 @@ class OntologyAuditor(BaseAgent):
                 "- **Fragmentation**: If metrics show high isolation, pinpoint logical gaps and demand causal links.\n\n"
                 "### 4. Feedback Principles:\n"
                 "- **No Compromise**: If logic is flawed, 'is_valid' MUST be false even if JSON is well-formed.\n"
+                "- **Strictly Avoid LaTeX**: Do NOT use backslashes (`\\`), dollar signs (`$`), or LaTeX commands (e.g., `\\xrightarrow`). These cause JSON parsing errors.\n"
+                "- **Plain Text Relations**: Represent paths using simple text arrows, e.g., (Node A) -> [REL] -> (Node B).\n"
                 "- **Grounded in Fact**: All suggestions must be supported by the source text; no hallucinations.\n\n"
                 "### Output Format (JSON):\n"
+                "- Ensure the output is a standard JSON string without invalid escape sequences.\n"
                 "- 'is_valid': Boolean.\n"
-                "- 'critique': If failed, specify:\n"
-                "  a) Specific rule or logical pairing violations.\n"
-                "  b) Structural issues (e.g., label mergers, connectivity directions).\n"
-                "  c) Clear instructions for correction."
+                "- 'critique': {\n"
+                "    'violation_details': 'Specific rule or logical pairing violations.',\n"
+                "    'structural_issues': 'Structural issues like label mergers or connectivity gaps.',\n"
+                "    'correction_suggestions': 'Clear instructions using plain text arrows only.'\n"
+                "  }"
             )
         }
 
@@ -157,7 +157,7 @@ class OntologyAuditor(BaseAgent):
         return response
 
     def postprocess_llm_output(self, output_string: str) -> Any:
-        return json.dumps(json.loads(output_string.replace('```json', '').replace('```', '').strip()), ensure_ascii=False)
+        return self._parse_json_output(output_string)
 
     def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
         """

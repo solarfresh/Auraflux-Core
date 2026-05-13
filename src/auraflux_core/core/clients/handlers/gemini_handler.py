@@ -1,7 +1,9 @@
 from typing import Any, Generator, List
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
+from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
+                      wait_exponential)
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
@@ -15,6 +17,12 @@ class GeminiHandler(BaseHandler):
         # Configure the Gemini API client
         self.client = genai.Client(api_key=self.config.api_key)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1.2, min=10, max=60),
+        retry=retry_if_exception_type(errors.ServerError),
+        reraise=True
+    )
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """
         Asynchronously generates a response from the Gemini API.

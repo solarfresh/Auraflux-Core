@@ -1,4 +1,5 @@
 import json
+import re
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional
@@ -227,3 +228,17 @@ class BaseAgent(ABC):
 
     def postprocess_llm_output(self, output_string: str) -> str:
         return output_string
+
+    def _parse_json_output(self, output_string: str) -> str:
+        json_pattern = r"```json\s*(\{.*\})\s*```"
+        match = re.search(json_pattern, output_string, re.DOTALL)
+        if match:
+            json_string = match.group(1)
+        else:
+            self.logger.warning(output_string)
+            raise ValueError()
+
+        clean_string = re.sub(r'\\\w+\{([^}]+)\}', r'->(\1)->', json_string)
+        clean_string = clean_string.replace('$', '')
+
+        return json.dumps(json.loads(clean_string), ensure_ascii=False)
