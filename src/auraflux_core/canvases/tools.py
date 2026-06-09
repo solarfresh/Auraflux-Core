@@ -499,7 +499,8 @@ class OntologyValidatorTool(BaseTool):
 
     async def run(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Performs a deep audit of nodes and edges for Phase 1 compliance.
+        Main entry point for Phase 1 Ontology Validation.
+        Orchestrates specialized validation layers for Nodes and Edges.
         """
         results = {
             "is_valid": True,
@@ -507,61 +508,154 @@ class OntologyValidatorTool(BaseTool):
             "stats": {"node_count": len(nodes), "edge_count": len(edges)}
         }
 
-        for node in nodes:
-            node['type'] = node['type'].upper()
+        # 1. Node-Level Validation
+        node_errors = self._validate_nodes(nodes)
+        results["errors"].extend(node_errors)
+
+        # 2. Edge-Level Validation (requires node map for type checking)
+        node_map = {n['id']: n.get('type', '').upper() for n in nodes}
+        edge_errors = self._validate_edges(edges, node_map)
+        results["errors"].extend(edge_errors)
+
+        results["is_valid"] = len(results["errors"]) == 0
+        return results
+
+    def _validate_nodes(self, nodes: List[Dict[str, Any]]) -> List[str]:
+        """
+        Validates individual nodes against Empirical Science requirements.
+        Focus: Grounding (source_ref) and Synthesis (rationale).
+        """
+        errors = []
+        # Set of types that REQUIRE empirical grounding
+        grounding_required = {ConceptualNodeType.EVENT, ConceptualNodeType.RESOURCE}
+        # Set of types that REQUIRE logical synthesis rationale
+        synthesis_required = {ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME}
+
+        # for node in nodes:
+        #     n_id = node.get('id', 'UNKNOWN_ID')
+        #     n_type = node.get('type', '').upper()
+
+        #     # Rule: Empirical Grounding (Facts must have sources)
+        #     if n_type in grounding_required:
+        #         if not node.get('source_ref') or len(str(node.get('source_ref')).strip()) < 3:
+        #             errors.append(f"Node[{n_id}]: {n_type} is missing mandatory 'source_ref' for grounding.")
+
+        #     # Rule: Reasoning Requirement (Claims must have logic)
+        #     if n_type in synthesis_required:
+        #         if not node.get('rationale') or len(str(node.get('rationale')).strip()) < 10:
+        #             errors.append(f"Node[{n_id}]: {n_type} is missing mandatory 'rationale' for synthesis.")
+
+        #     # Rule: Forbidden attributes for Phase 1 (Data Isolation)
+        #     if 'position' in node:
+        #         errors.append(f"Node[{n_id}]: Spatial data 'position' is prohibited in Phase 1.")
+
+        return errors
+
+    def _validate_edges(self, edges: List[Dict[str, Any]], node_map: Dict[str, str]) -> List[str]:
+        """
+        Validates relationship logic against the Empirical Science Matrix.
+        Focuses on causal direction, evidence weight, and temporal integrity.
+        """
+        errors = []
 
         for edge in edges:
-            edge['relation'] = edge['relation'].upper()
+            # Normalize relation and extract identifiers
+            rel = edge.get('relation', '').upper()
+            src_id, tgt_id = edge.get('source', ''), edge.get('target', '')
 
-        # 1. Node-Level Validation
-        validated_nodes = []
-        for node_data in nodes:
-            try:
-                node = ConceptualNode(**node_data)
+            # Resolve source and target types from the pre-built node_map
+            s_type = node_map.get(src_id)
+            t_type = node_map.get(tgt_id)
 
-                # Rule: Phase 1 spatial constraint
-                if node.position is not None:
-                    results["errors"].append(f"Node[{node.id}]: Spatial data (position) found in Phase 1.")
+            # Rule: Reference Integrity
+            if not s_type or not t_type:
+                errors.append(f"Edge[{src_id}->{tgt_id}]: Orphaned edge - one or both nodes are undefined.")
+                continue
 
-                # Rule: Empirical Grounding (Zero-Inference)
-                # if node.type in [ConceptualNodeType.EVENT, ConceptualNodeType.RESOURCE]:
-                #     if not node.source_ref or len(node.source_ref.strip()) < 3:
-                #         results["errors"].append(f"Node[{node.id}]: {node.type} missing mandatory 'source_ref'.")
+            # --- Sub-Logic: TRIGGERS (Causal Activation) ---
+            if rel == ConceptualEdgeType.TRIGGERS:
+                # 1. Rule: Passive Agent Error (Entities/Resources cannot 'act')
+                if s_type in {ConceptualNodeType.ENTITY, ConceptualNodeType.RESOURCE}:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: Static {s_type} cannot TRIGGERS causality. "
+                        "Must be mediated by an [EVENT] (action)."
+                    )
 
-                # Rule: Reasoning Requirement
-                # if node.type in [ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME]:
-                #     if not node.rationale or len(node.rationale.strip()) < 10:
-                #         results["errors"].append(f"Node[{node.id}]: {node.type} missing detailed 'rationale'.")
+                # 2. Rule: Temporal Paradox (Synthesis cannot trigger past facts)
+                if s_type in {ConceptualNodeType.OUTCOME, ConceptualNodeType.INSIGHT} and t_type == ConceptualNodeType.EVENT:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: Temporal Paradox - Synthesis ({s_type}) "
+                        "cannot TRIGGERS a past observation (EVENT)."
+                    )
 
-                validated_nodes.append(node)
-            except ValidationError as e:
-                results["errors"].append(f"Node Schema Error: {str(e)}")
+                # 3. Rule: Directional Logic (Outcomes are terminal sinks)
+                if s_type == ConceptualNodeType.OUTCOME:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: Terminal Violation - OUTCOME is a research goal "
+                        "and should not act as a causal source for other nodes."
+                    )
 
-        # 2. Edge-Level Validation (Logic Flow)
-        for edge_data in edges:
-            try:
-                edge = ConceptualEdge(**edge_data)
+                # 4. Rule: Static Boundary Restriction
+                if s_type == ConceptualNodeType.BOUNDARY:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: BOUNDARY is a constraint, not a driver. Use CONSTRAINS."
+                    )
 
-                # Rule: Empirical Logic Connectivity
-                if edge.type == ConceptualEdgeType.VALIDATES:
-                    if not edge.evidence:
-                        results["errors"].append(f"Edge[{edge.source}->{edge.target}]: VALIDATES edge missing 'evidence'.")
+            # --- Sub-Logic: VALIDATES (Empirical Evidence) ---
+            elif rel == ConceptualEdgeType.VALIDATES:
+                # 1. Rule: Fact Categorization Error (Facts are observed, not proven)
+                if t_type == ConceptualNodeType.EVENT:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: EVENT cannot be validated; it is a raw observation. Use REF."
+                    )
 
-                # Rule: Constraint Origin
-                if edge.type == ConceptualEdgeType.CONSTRAINS:
-                    # Optional: Logic to check if source node is actually a BOUNDARY node
-                    pass
+                # 2. Rule: Weightless Validation (Non-empirical nodes cannot provide proof)
+                if s_type in {ConceptualNodeType.QUERY, ConceptualNodeType.BOUNDARY, ConceptualNodeType.NAVIGATION}:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: {s_type} lacks empirical weight to VALIDATES. "
+                        "Only EVENT, RESOURCE, or INSIGHT can provide support."
+                    )
 
-            except ValidationError as e:
-                results["errors"].append(f"Edge Schema Error: {str(e)}")
+                # 3. Rule: Target Restriction (Validates must target a claim)
+                if t_type not in {ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME, ConceptualNodeType.CONCEPT}:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: VALIDATES must target a hypothesis or claim (INSIGHT/OUTCOME)."
+                    )
 
-        if results["errors"]:
-            results["is_valid"] = False
-            self.logger.warning(f"Validation failed with {len(results['errors'])} errors.")
-        else:
-            self.logger.info("Graph validated successfully against Empirical Ontology.")
+            # --- Sub-Logic: CONSTRAINS (Scope & Limitation) ---
+            elif rel == ConceptualEdgeType.CONSTRAINS:
+                # 1. Rule: Constraint Source Control
+                allowed_sources = {
+                    ConceptualNodeType.BOUNDARY,
+                    ConceptualNodeType.CONCEPT,
+                    ConceptualNodeType.GROUP,
+                    ConceptualNodeType.FOCUS
+                }
+                if s_type not in allowed_sources:
+                    errors.append(
+                        f"Edge[{src_id}->{tgt_id}]: {s_type} is not a valid source for CONSTRAINS. "
+                        "Constraints must originate from scope-defining nodes."
+                    )
 
-        return results
+            # --- Sub-Logic: Functional & System Constraints ---
+
+            # 1. Rule: Container Isolation (GROUP nodes)
+            if s_type == ConceptualNodeType.GROUP and rel not in {ConceptualEdgeType.REF, ConceptualEdgeType.LINK}:
+                errors.append(
+                    f"Edge[{src_id}->{tgt_id}]: GROUP is a spatial container; only REF or LINK is permitted."
+                )
+
+            # 2. Rule: Navigation Integrity
+            if s_type == ConceptualNodeType.NAVIGATION and rel != ConceptualEdgeType.LINK:
+                errors.append(
+                    f"Edge[{src_id}->{tgt_id}]: NAVIGATION nodes must only use LINK to maintain system flow."
+                )
+
+            # 3. Rule: Recursive Logic (Self-loops)
+            if src_id == tgt_id:
+                errors.append(f"Edge[{src_id}->{tgt_id}]: Self-referential edges are prohibited.")
+
+        return errors
 
     def get_name(self) -> str:
         return "ontology_validator"

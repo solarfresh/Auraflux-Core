@@ -19,7 +19,7 @@ class GeminiHandler(BaseHandler):
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1.2, min=10, max=60),
+        wait=wait_exponential(multiplier=1.2, min=30, max=300),
         retry=retry_if_exception_type(errors.ServerError),
         reraise=True
     )
@@ -60,7 +60,9 @@ class GeminiHandler(BaseHandler):
             tool_calls = {'tool': function_call.name , 'args': function_call.args} if function_call is not None else None
 
             return LLMResponse(text=response_text, token_usage=getattr(usage_metadata, 'total_token_count', 0), tool_calls=tool_calls)
-
+        except errors.ServerError as e:
+            self.logger.warning(e)
+            raise e
         except Exception as e:
             raise RuntimeError(f"An error occurred while calling the Gemini API: {e}")
 
