@@ -1,0 +1,196 @@
+import json
+from typing import Any, Dict
+
+from auraflux_core.core.orchestrators.state import (OrchestratorState,
+                                                    OrchestratorStatus)
+from auraflux_core.core.orchestrators.strategies.base import \
+    OrchestrationStrategy
+from auraflux_core.core.schemas.messages import Message
+
+
+class AgenticStrategy(OrchestrationStrategy):
+    """
+    Agentic (Reflective) Strategy.
+    Uses 'name' in Message to distinguish between Architect and Auditor turns.
+    """
+
+    def __init__(self, actor_name: str, auditor_name: str, validator_tool_name: str, max_retries: int = 2):
+        super().__init__()
+        self.actor_name = actor_name
+        self.auditor_name = auditor_name
+        self.validator_tool_name = validator_tool_name
+        self.max_retries = max_retries
+
+    async def execute(
+        self, input_data: Any, tools: Dict[str, Any], agents: Dict[str, Any], state: OrchestratorState
+    ) -> OrchestratorState:
+
+        # 1. Ingestion
+        ingest_res = await self.dispatch(state, "file_reader", tools, file_path=input_data)
+        units = ingest_res.get("chunks") or []
+
+        state.update_status(OrchestratorStatus.PROCESSING)
+        processed_results = []
+
+        for unit in units:
+            # Initial User request with name 'User'
+            unit_id = unit.get("source_id") or unit.get("id")
+            state.current_unit_id = unit_id
+            self.logger.info(f"Processing Unit [{unit_id}]: Initiating knowledge extraction.")
+
+            messages = [
+                Message(role="user", content=f"Extract: {unit['content']}", name="User")
+            ]
+
+            for attempt in range(self.max_retries + 1):
+                # dispatch calls architect.generate(messages)
+                output = await self.dispatch(
+                    state,
+                    self.actor_name,
+                    agents,
+                    messages=messages,
+                )
+                output_json = json.loads(output.content)
+
+                valid_res = await self.dispatch(
+                    state,
+                    self.validator_tool_name,
+                    tools,
+                    nodes=output_json.get("nodes", []),
+                    edges=output_json.get("edges", [])
+                )
+
+                # Auditor message named by the agent name
+                audit_msgs = [
+                    output,
+                    Message(role="user", content=f"Audit this: {output.content}\nValidation Results: {valid_res}", name="User")
+                ]
+                audit_res = await self.dispatch(state, self.auditor_name, agents, messages=audit_msgs)
+                audit_res_json = json.loads(audit_res.content)
+
+                if valid_res.get("is_valid") and audit_res_json.get("is_valid"):
+                    processed_results.append(output)
+                    break
+
+                # Prepare Refinement
+                if attempt < self.max_retries:
+                    state.update_status(OrchestratorStatus.REFINING)
+
+                    # We record the architect's failed attempt with its name
+                    messages.append(
+                        Message(role="assistant", content=str(output), name=self.actor_name)
+                    )
+                    # We record the auditor's critique with its name
+                    critique_combined = self.assemble_critique_combined(valid_res, audit_res)
+                    self.logger.info(critique_combined)
+                    messages.append(
+                        Message(role="user", content=critique_combined, name=self.auditor_name)
+                    )
+                else:
+                    processed_results.append(output)
+
+        state.output["raw_results"] = processed_results
+        return state
+
+    def assemble_critique_combined(self, valid_res: Dict, auditor_message: Any) -> str:
+        """
+        Synthesizes multi-layered feedback for the Knowledge Architect.
+        Execution Flow: Mandatory Tool Blocks > Structural Metrics > Semantic Reasoning.
+        """
+
+        # 1. Mandatory Tool-Level Validation (Hard Blocks)
+        # Captures schema violations, missing source_ref, or illegal edge pairings.
+        tool_errors = valid_res.get('errors', [])
+        if tool_errors:
+            error_list = "\n".join([f"• {err}" for err in tool_errors])
+            tool_header = "【CRITICAL: SPECIFICATION VIOLATIONS】"
+            tool_section = f"{tool_header}\n{error_list}"
+        else:
+            tool_section = "【SPECIFICATION CHECK】: Passed (Schema is valid)."
+
+        # 2. Structural Connectivity Diagnosis (Contextual Metrics)
+        # Derived from isolation rates and hub analysis to guide graph density.
+        structural_report = auditor_message.metadata.get(
+            "diagnostic_conclusion",
+            "No diagnostic metrics provided."
+        )
+
+        # 3. Qualitative Expert Critique (Semantic Reasoning)
+        # Contains detailed violation_details, structural_issues, and suggestions from the LLM.
+        expert_critique = auditor_message.content
+
+        # Assemble the final payload for the Architect's retry loop
+        return (
+            f"{tool_section}\n\n"
+            f"--- STRUCTURAL CONTEXT (Graph Density & Health) ---\n"
+            f"{structural_report}\n\n"
+            f"--- EXPERT AUDIT (Semantic & Logical Refinement) ---\n"
+            f"{expert_critique}\n\n"
+            f"INSTRUCTION: Revise the graph based on the logic above. "
+            f"Strictly avoid LaTeX and ensure all source_refs are grounded."
+        )
+
+
+class SequentialStrategy(OrchestrationStrategy):
+    """
+    A domain-agnostic Sequential Strategy.
+    Follows a linear execution path: Ingest -> Atomic Process -> Collect.
+    Used as the baseline for comparing against reflective (Agentic) modes.
+    """
+
+    def __init__(self, actor_name: str, ingestion_tool_name: str = "file_reader"):
+        super().__init__()
+        self.actor_name = actor_name
+        self.ingestion_tool = ingestion_tool_name
+
+    async def execute(
+        self,
+        input_data: Any,
+        tools: Dict[str, Any],
+        agents: Dict[str, Any],
+        state: OrchestratorState
+    ) -> OrchestratorState:
+
+        # 1. Ingestion Phase
+        # Falls back to 'run' method automatically via dispatch logic
+        ingest_res = await self.dispatch(
+            state,
+            self.ingestion_tool,
+            tools,
+            file_path=input_data
+        )
+        units = ingest_res.get("chunks") or ingest_res.get("units") or []
+
+        state.update_status(OrchestratorStatus.PROCESSING)
+        results = []
+
+        # 2. Linear Processing Loop
+        for unit in units:
+            unit_id = unit.get("source_id") or unit.get("id")
+            state.current_unit_id = unit_id
+
+            self.logger.info(f"Processing Unit [{unit_id}]: Initiating knowledge extraction.")
+
+            # Construct a single-turn message for the actor
+            messages = [
+                Message(
+                    role="user",
+                    content=f"Extract knowledge from the following content:\n{unit.get('content')}",
+                    name="User"
+                )
+            ]
+
+            # Dispatch to actor's generate() method (default)
+            # This captures duration, tokens, and output into the state history
+            output = await self.dispatch(
+                state,
+                self.actor_name,
+                agents,
+                messages=messages
+            )
+
+            results.append(output)
+
+        # 3. Final State Update
+        state.output["raw_results"] = results
+        return state

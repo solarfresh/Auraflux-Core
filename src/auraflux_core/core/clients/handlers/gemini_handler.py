@@ -1,11 +1,14 @@
 from typing import Any, Generator, List
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
+from tenacity import (retry, retry_if_exception_type, stop_after_attempt,
+                      wait_exponential)
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
                                                 ProviderConfig)
+from auraflux_core.core.tools.base_tool import ToolSpecConverter
 
 
 class GeminiHandler(BaseHandler):
@@ -14,6 +17,12 @@ class GeminiHandler(BaseHandler):
         # Configure the Gemini API client
         self.client = genai.Client(api_key=self.config.api_key)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1.2, min=30, max=300),
+        retry=retry_if_exception_type(errors.ServerError),
+        reraise=True
+    )
     async def generate(self, request: LLMRequest) -> LLMResponse:
         """
         Asynchronously generates a response from the Gemini API.
@@ -40,8 +49,20 @@ class GeminiHandler(BaseHandler):
                 raise ValueError("Received an empty or invalid response from the Gemini API.")
 
             response_text = response.text
-            return LLMResponse(text=response_text)
+            usage_metadata = response.usage_metadata
+            if response.candidates and len(response.candidates) > 0:
+                candidate = response.candidates[0]
+                if candidate.content and candidate.content.parts and len(candidate.content.parts) > 0:
+                    part = candidate.content.parts[0]
+                    if hasattr(part, 'function_call'):
+                        function_call = part.function_call
 
+            tool_calls = {'tool': function_call.name , 'args': function_call.args} if function_call is not None else None
+
+            return LLMResponse(text=response_text, token_usage=getattr(usage_metadata, 'total_token_count', 0), tool_calls=tool_calls)
+        except errors.ServerError as e:
+            self.logger.warning(e)
+            raise e
         except Exception as e:
             raise RuntimeError(f"An error occurred while calling the Gemini API: {e}")
 
@@ -88,9 +109,28 @@ class GeminiHandler(BaseHandler):
         }
 
     def _generate_content_config(self, request: LLMRequest) -> types.GenerateContentConfig:
+        tools = None
+        tool_config = None
+        if request.tools is not None:
+            tools = [
+                types.Tool(function_declarations=[
+                    ToolSpecConverter.to_gemini(tool) for tool in request.tools
+                ])
+            ]
+            tool_config = types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(mode=types.FunctionCallingConfigMode.AUTO)
+            )
+
+        thinking_config = None
+        if request.thinking_level is not None:
+            thinking_config = types.ThinkingConfig(thinking_level=getattr(types.ThinkingLevel, request.thinking_level.upper()) if request.thinking_level else None)
+
         return types.GenerateContentConfig(
             system_instruction=request.system_message,
             max_output_tokens=request.max_tokens,
             temperature=request.temperature,
-            top_p=request.top_p
+            top_p=request.top_p,
+            thinking_config=thinking_config,
+            tools=tools,
+            tool_config=tool_config,
         )

@@ -1,7 +1,7 @@
-google-genai==1.64.0
+google-genai==2.2.0
 networkx==3.6.1
-numpy==2.4.3
-openai==2.23.0
-pydantic==2.12.5
-pydantic-settings==2.13.1
+numpy==2.4.4
+openai==2.36.0
+pydantic==2.13.4
+pydantic-settings==2.14.1
 pygraphviz==1.14
