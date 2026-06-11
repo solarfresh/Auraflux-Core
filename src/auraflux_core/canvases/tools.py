@@ -798,8 +798,6 @@ class SpatialLocateTool(BaseTool):
             graph_state = ConceptualGraph(**kwargs.get('existing_graph_state', {}))
             existing_node_ids = list(graph_state.nodes.keys())
 
-            self.logger.debug(f"expansion_data: {kwargs.get('expansion_data', {})}")
-            self.logger.debug(f"existing_graph_state: {kwargs.get('existing_graph_state', {})}")
             if not expansion.nodes:
                 return json.dumps({"error": "Expansion batch is empty."})
 
@@ -868,6 +866,10 @@ class SpatialLocateTool(BaseTool):
             return graph_state.model_dump_json()
 
         except Exception as e:
+            self.logger.warning('==== expansion_data ====')
+            self.logger.warning(kwargs.get('expansion_data', {}))
+            self.logger.warning('==== existing_graph_state ====')
+            self.logger.warning(kwargs.get('existing_graph_state', {}))
             self.logger.error(f"SpatialLocateTool error: {str(e)}")
             return json.dumps({"error": str(e)})
 
