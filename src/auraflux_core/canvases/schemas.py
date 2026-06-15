@@ -9,10 +9,10 @@ from auraflux_core.core.schemas.tools import ToolConfig
 
 
 class NodeHandle(str, Enum):
-    NORTH = 'n'
-    EAST = 'e'
-    WEST = 'w'
-    SOUTH = 's'
+    TOP = 'top'
+    BOTTOM = 'bottom'
+    RIGHT = 'right'
+    LEFT = 'left'
 
 
 class Position(BaseModel):
@@ -171,16 +171,64 @@ class ExpansionNodes(BaseModel):
 
 class SemanticGravity(BaseModel):
     """
-    Physical constants for the force-directed layout.
-    High values = High Tension (closer to anchor).
-    Low values = Low Tension (peripheral).
+    Physical constants for the force-directed layout mapped to ConceptualNodeType.
+    High values (>= 1.0) = High Tension (tightly bound to anchor / canvas center).
+    Low values (<= 0.4)  = Low Tension (pushed to peripheral boundary / exploratory orbit).
     """
-    focus: float = Field(default=1.0, ge=0.0, le=2.0)
-    concept: float = Field(default=0.8, ge=0.0, le=2.0)
-    insight: float = Field(default=0.5, ge=0.0, le=2.0)
-    resource: float = Field(default=0.3, ge=0.0, le=2.0)
-    query: float = Field(default=0.2, ge=0.0, le=2.0)
-    group: float = Field(default=0.1, ge=0.0, le=2.0)
+    # === 1. Gravitational Anchors (全域與局部核心) ===
+    focus: float = Field(
+        default=1.5, ge=0.0, le=2.0,
+        description="The ultimate canvas North Star. Strongest gravity center."
+    )
+    group: float = Field(
+        default=1.2, ge=0.0, le=2.0,
+        description="Macro spatial container. Requires high tension to keep clustered children intact."
+    )
+
+    # === 2. Empirical Core (實證核心：因果與時序發育) ===
+    event: float = Field(
+        default=1.0, ge=0.0, le=2.0,
+        description="Dynamic real-world actions. Forms the immediate inner orbit of the causal chain."
+    )
+    boundary: float = Field(
+        default=0.9, ge=0.0, le=2.0,
+        description="Hard regulatory limits or constraints. Clamps closely to the events it restricts."
+    )
+    outcome: float = Field(
+        default=0.8, ge=0.0, le=2.0,
+        description="Terminal states or policy responses. Sinks down at the end of causal progressions."
+    )
+    entity: float = Field(
+        default=0.7, ge=0.0, le=2.0,
+        description="Static components or technology assets. Positioned intermediately alongside mediated events."
+    )
+
+    # === 3. Functional Canvas (功能與合成推論) ===
+    concept: float = Field(
+        default=0.8, ge=0.0, le=2.0,
+        description="Abstract theories or academic frameworks. Acts as local semantic sub-hubs."
+    )
+    insight: float = Field(
+        default=0.6, ge=0.0, le=2.0,
+        description="Secondary synthesized conclusions or qualitative trends. Floats mid-orbit."
+    )
+
+    # === 4. Periphery & Infrastructure (邊緣探索與基礎導航) ===
+    navigation: float = Field(
+        default=0.4, ge=0.0, le=2.0,
+        description="Presentation portals or reading paths. Kept lightweight to avoid distorting causal topology."
+    )
+    resource: float = Field(
+        default=0.3, ge=0.0, le=2.0,
+        description="Raw documents or external empirical datasets. Dispersed at the peripheral support tier."
+    )
+    query: float = Field(
+        default=0.2, ge=0.0, le=2.0,
+        description="Unresolved research gaps and open questions. Flung to the outermost boundary of the data structure."
+    )
+
+    class Config:
+        populate_by_name = True
 
 
 class SpatialLocateToolConfig(ToolConfig):

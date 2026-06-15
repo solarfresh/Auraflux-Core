@@ -94,7 +94,7 @@ class BaseAgent(ABC):
             raise e
 
     async def generate_tool_message(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        self.logger.debug("Generating tool message...")
+        self.logger.info("Generating tool message...")
         tool_call_data = await self._decide_tool_calls(messages)
         messsage = await self._execute_tool_calls(tool_call_data, tool_args_map)
         return messsage
