@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.tools import ToolConfig
@@ -84,9 +84,10 @@ class ConceptualNode(BaseModel):
     # --- Spatial Information (Layout Layer) ---
     position: Optional[Position] = None
 
-    class Config:
-        use_enum_values = True
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        str_strip_whitespace=True
+    )
 
 
 class ConceptualEdgeType(str, Enum):
@@ -145,9 +146,10 @@ class ConceptualEdge(BaseModel):
     source_handle: Optional[NodeHandle] = Field(None, description="Starting point (n,s,e,w)")
     target_handle: Optional[NodeHandle] = Field(None, description="Ending point (n,s,e,w)")
 
-    class Config:
-        use_enum_values = True
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        str_strip_whitespace=True
+    )
 
 
 class ConceptualGraph(BaseModel):
@@ -227,8 +229,9 @@ class SemanticGravity(BaseModel):
         description="Unresolved research gaps and open questions. Flung to the outermost boundary of the data structure."
     )
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
 
 
 class SpatialLocateToolConfig(ToolConfig):
