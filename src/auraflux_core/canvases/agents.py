@@ -149,7 +149,8 @@ class KnowledgeArchitect(BaseAgent):
         }
 
     def postprocess_llm_output(self, output_string: str) -> Any:
-        return self._parse_json_output(output_string)
+        json_object = self._parse_json_output(output_string)
+        return json.dumps(json_object, ensure_ascii=False)
 
 
 class OntologyAuditor(BaseAgent):
@@ -275,7 +276,8 @@ class OntologyAuditor(BaseAgent):
         return response
 
     def postprocess_llm_output(self, output_string: str) -> Any:
-        return self._parse_json_output(output_string)
+        json_object = self._parse_json_output(output_string)
+        return json.dumps(json_object, ensure_ascii=False)
 
     def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
         """
@@ -383,6 +385,3 @@ class GraphSynthesistAgent(BaseAgent):
                     self._tool_cache['spatial_locate'] = SpatialLocateTool(config)
 
         return super().get_tool_map()
-
-    def postprocess_tool_output(self, output_string: str) -> Any:
-        return json.loads(output_string.replace('```json', '').replace('```', '').strip())

@@ -94,7 +94,7 @@ class BaseAgent(ABC):
             raise e
 
     async def generate_tool_message(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        self.logger.debug("Generating tool message...")
+        self.logger.info("Generating tool message...")
         tool_call_data = await self._decide_tool_calls(messages)
         messsage = await self._execute_tool_calls(tool_call_data, tool_args_map)
         return messsage
@@ -224,7 +224,8 @@ class BaseAgent(ABC):
         return msg_map.get(self.config.lang, 'default')
 
     def postprocess_tool_output(self, output_string: str) -> Any:
-        return json.loads(output_string.replace('```json', '').replace('```', '').strip())
+        json_object = self._parse_json_output(output_string)
+        return json_object
 
     def postprocess_llm_output(self, output_string: str) -> str:
         return output_string
@@ -235,10 +236,13 @@ class BaseAgent(ABC):
         if match:
             json_string = match.group(1)
         else:
-            self.logger.warning(output_string)
-            raise ValueError()
+            try:
+                return json.loads(output_string)
+            except Exception as e:
+                self.logger.warning(output_string)
+                raise e
 
         clean_string = re.sub(r'\\\w+\{([^}]+)\}', r'->(\1)->', json_string)
         clean_string = clean_string.replace('$', '')
 
-        return json.dumps(json.loads(clean_string), ensure_ascii=False)
+        return json.loads(clean_string)

@@ -512,7 +512,7 @@ class OntologyValidatorTool(BaseTool):
         node_errors = self._validate_nodes(nodes)
         results["errors"].extend(node_errors)
 
-        # 2. Edge-Level Validation (requires node map for type checking)
+        # 2. Edge-Level Validation (requires node map for runtime type checking)
         node_map = {n['id']: n.get('type', '').upper() for n in nodes}
         edge_errors = self._validate_edges(edges, node_map)
         results["errors"].extend(edge_errors)
@@ -526,28 +526,34 @@ class OntologyValidatorTool(BaseTool):
         Focus: Grounding (source_ref) and Synthesis (rationale).
         """
         errors = []
-        # Set of types that REQUIRE empirical grounding
-        grounding_required = {ConceptualNodeType.EVENT, ConceptualNodeType.RESOURCE}
-        # Set of types that REQUIRE logical synthesis rationale
-        synthesis_required = {ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME}
+        # Define requirement matrices
+        grounding_required = {"EVENT", "RESOURCE"}
+        synthesis_required = {"INSIGHT", "OUTCOME"}
 
-        # for node in nodes:
-        #     n_id = node.get('id', 'UNKNOWN_ID')
-        #     n_type = node.get('type', '').upper()
+        focus_count = 0
 
-        #     # Rule: Empirical Grounding (Facts must have sources)
-        #     if n_type in grounding_required:
-        #         if not node.get('source_ref') or len(str(node.get('source_ref')).strip()) < 3:
-        #             errors.append(f"Node[{n_id}]: {n_type} is missing mandatory 'source_ref' for grounding.")
+        for node in nodes:
+            n_id = node.get('id', 'UNKNOWN_ID')
+            n_type = node.get('type', '').upper()
 
-        #     # Rule: Reasoning Requirement (Claims must have logic)
-        #     if n_type in synthesis_required:
-        #         if not node.get('rationale') or len(str(node.get('rationale')).strip()) < 10:
-        #             errors.append(f"Node[{n_id}]: {n_type} is missing mandatory 'rationale' for synthesis.")
+            if n_type == "FOCUS":
+                focus_count += 1
 
-        #     # Rule: Forbidden attributes for Phase 1 (Data Isolation)
-        #     if 'position' in node:
-        #         errors.append(f"Node[{n_id}]: Spatial data 'position' is prohibited in Phase 1.")
+            # Rule: Empirical Grounding (Facts must have verifiable sources)
+            if n_type in grounding_required:
+                if not node.get('source_ref') or len(str(node.get('source_ref')).strip()) < 3:
+                    errors.append(f"Node[{n_id}]: {n_type} is missing mandatory 'source_ref' for grounding.")
+
+            # Rule: Reasoning Requirement (Claims and outputs must have synthesis logic)
+            if n_type in synthesis_required:
+                if not node.get('rationale') or len(str(node.get('rationale')).strip()) < 10:
+                    errors.append(f"Node[{n_id}]: {n_type} is missing mandatory 'rationale' for synthesis.")
+
+        # Rule: Global North Star Unique Restraint (Canvas view integrity)
+        if focus_count > 1:
+            errors.append(f"Global Violation: Found {focus_count} FOCUS nodes. A canvas view must have exactly one FOCUS node.")
+        elif focus_count == 0:
+            errors.append("Global Violation: Graph is missing a FOCUS root node.")
 
         return errors
 
@@ -559,101 +565,80 @@ class OntologyValidatorTool(BaseTool):
         errors = []
 
         for edge in edges:
-            # Normalize relation and extract identifiers
-            rel = edge.get('relation', '').upper()
+            e_id = edge.get('id', 'UNKNOWN_EDGE_ID')
+            # Normalized relation extracted from matching Pydantic fields
+            rel = edge.get('type', '').upper()
             src_id, tgt_id = edge.get('source', ''), edge.get('target', '')
 
             # Resolve source and target types from the pre-built node_map
             s_type = node_map.get(src_id)
             t_type = node_map.get(tgt_id)
 
-            # Rule: Reference Integrity
+            # Rule: Reference Integrity (Preventing graph orphans)
             if not s_type or not t_type:
-                errors.append(f"Edge[{src_id}->{tgt_id}]: Orphaned edge - one or both nodes are undefined.")
+                errors.append(f"Edge[{e_id}]: Orphaned edge ({src_id}->{tgt_id}) - one or both nodes are undefined in node_map.")
                 continue
 
-            # --- Sub-Logic: TRIGGERS (Causal Activation) ---
-            if rel == ConceptualEdgeType.TRIGGERS:
-                # 1. Rule: Passive Agent Error (Entities/Resources cannot 'act')
-                if s_type in {ConceptualNodeType.ENTITY, ConceptualNodeType.RESOURCE}:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: Static {s_type} cannot TRIGGERS causality. "
-                        "Must be mediated by an [EVENT] (action)."
-                    )
-
-                # 2. Rule: Temporal Paradox (Synthesis cannot trigger past facts)
-                if s_type in {ConceptualNodeType.OUTCOME, ConceptualNodeType.INSIGHT} and t_type == ConceptualNodeType.EVENT:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: Temporal Paradox - Synthesis ({s_type}) "
-                        "cannot TRIGGERS a past observation (EVENT)."
-                    )
-
-                # 3. Rule: Directional Logic (Outcomes are terminal sinks)
-                if s_type == ConceptualNodeType.OUTCOME:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: Terminal Violation - OUTCOME is a research goal "
-                        "and should not act as a causal source for other nodes."
-                    )
-
-                # 4. Rule: Static Boundary Restriction
-                if s_type == ConceptualNodeType.BOUNDARY:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: BOUNDARY is a constraint, not a driver. Use CONSTRAINS."
-                    )
-
-            # --- Sub-Logic: VALIDATES (Empirical Evidence) ---
-            elif rel == ConceptualEdgeType.VALIDATES:
-                # 1. Rule: Fact Categorization Error (Facts are observed, not proven)
-                if t_type == ConceptualNodeType.EVENT:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: EVENT cannot be validated; it is a raw observation. Use REF."
-                    )
-
-                # 2. Rule: Weightless Validation (Non-empirical nodes cannot provide proof)
-                if s_type in {ConceptualNodeType.QUERY, ConceptualNodeType.BOUNDARY, ConceptualNodeType.NAVIGATION}:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: {s_type} lacks empirical weight to VALIDATES. "
-                        "Only EVENT, RESOURCE, or INSIGHT can provide support."
-                    )
-
-                # 3. Rule: Target Restriction (Validates must target a claim)
-                if t_type not in {ConceptualNodeType.INSIGHT, ConceptualNodeType.OUTCOME, ConceptualNodeType.CONCEPT}:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: VALIDATES must target a hypothesis or claim (INSIGHT/OUTCOME)."
-                    )
-
-            # --- Sub-Logic: CONSTRAINS (Scope & Limitation) ---
-            elif rel == ConceptualEdgeType.CONSTRAINS:
-                # 1. Rule: Constraint Source Control
-                allowed_sources = {
-                    ConceptualNodeType.BOUNDARY,
-                    ConceptualNodeType.CONCEPT,
-                    ConceptualNodeType.GROUP,
-                    ConceptualNodeType.FOCUS
-                }
-                if s_type not in allowed_sources:
-                    errors.append(
-                        f"Edge[{src_id}->{tgt_id}]: {s_type} is not a valid source for CONSTRAINS. "
-                        "Constraints must originate from scope-defining nodes."
-                    )
-
-            # --- Sub-Logic: Functional & System Constraints ---
-
-            # 1. Rule: Container Isolation (GROUP nodes)
-            if s_type == ConceptualNodeType.GROUP and rel not in {ConceptualEdgeType.REF, ConceptualEdgeType.LINK}:
-                errors.append(
-                    f"Edge[{src_id}->{tgt_id}]: GROUP is a spatial container; only REF or LINK is permitted."
-                )
-
-            # 2. Rule: Navigation Integrity
-            if s_type == ConceptualNodeType.NAVIGATION and rel != ConceptualEdgeType.LINK:
-                errors.append(
-                    f"Edge[{src_id}->{tgt_id}]: NAVIGATION nodes must only use LINK to maintain system flow."
-                )
-
-            # 3. Rule: Recursive Logic (Self-loops)
+            # Rule: Recursive Logic (Strictly prohibit self-loops)
             if src_id == tgt_id:
-                errors.append(f"Edge[{src_id}->{tgt_id}]: Self-referential edges are prohibited.")
+                errors.append(f"Edge[{e_id}]: Self-referential loop detected on Node[{src_id}].")
+                continue
+
+            # Rule: Global Centrality Restriction (Core FOCUS cannot be driven backwards)
+            if t_type == "FOCUS" and rel in {"TRIGGERS", "CONSTRAINS", "VALIDATES"}:
+                errors.append(f"Edge[{e_id}]: Directional Error - Central FOCUS cannot be driven by {rel} from Node[{src_id}].")
+
+            # --- Sub-Logic: TRIGGERS (Causal Activation Flow) ---
+            if rel == "TRIGGERS":
+                # Rule: Passive Agent Error (Entities/Resources are inanimate and cannot 'act' directly)
+                if s_type in {"ENTITY", "RESOURCE"}:
+                    errors.append(f"Edge[{e_id}]: Static {s_type}[{src_id}] cannot TRIGGERS causality. Must be mediated by an EVENT (action).")
+
+                # Rule: Temporal Paradox (Future synthesis cannot trigger past empirical facts)
+                if s_type in {"OUTCOME", "INSIGHT"} and t_type == "EVENT":
+                    errors.append(f"Edge[{e_id}]: Temporal Paradox - Synthesis {s_type}[{src_id}] cannot TRIGGERS a past observation EVENT[{tgt_id}].")
+
+                # Rule: Directional Sink Logic (Outcomes are terminal sinks/goals)
+                if s_type == "OUTCOME":
+                    errors.append(f"Edge[{e_id}]: Terminal Violation - OUTCOME[{src_id}] is a research goal and cannot act as a causal source.")
+
+                # Rule: Static Boundary Restriction (Boundaries frame constraints; they do not drive loops)
+                if s_type == "BOUNDARY":
+                    errors.append(f"Edge[{e_id}]: BOUNDARY[{src_id}] is a static constraint. Use CONSTRAINS instead of TRIGGERS.")
+
+                # Rule: Unresolved Gap Integrity (Empty questions cannot trigger subsequent nodes)
+                if s_type == "QUERY":
+                    errors.append(f"Edge[{e_id}]: Logical Flaw - Unresolved QUERY[{src_id}] cannot activate or TRIGGERS other nodes.")
+
+            # --- Sub-Logic: VALIDATES (Empirical Evidence Support) ---
+            elif rel == "VALIDATES":
+                # Rule: Fact Categorization Error (Raw facts are observed parameters, not proven statements)
+                if t_type == "EVENT":
+                    errors.append(f"Edge[{e_id}]: Fact Categorization Error - EVENT[{tgt_id}] is a raw observation and cannot be validated. Use REF.")
+
+                # Rule: Weightless Validation (Abstract or functional nodes lack empirical weight to prove claims)
+                if s_type in {"QUERY", "BOUNDARY", "NAVIGATION"}:
+                    errors.append(f"Edge[{e_id}]: {s_type}[{src_id}] lacks empirical weight to VALIDATES. Use EVENT, RESOURCE, or INSIGHT.")
+
+                # Rule: Target Restriction (Validations must lock onto an existing claim, concept, or query)
+                if t_type not in {"INSIGHT", "OUTCOME", "CONCEPT", "QUERY"}:
+                    errors.append(f"Edge[{e_id}]: VALIDATES must target a claim, concept, or unresolved question. Invalid target: {t_type}.")
+
+            # --- Sub-Logic: CONSTRAINS (Scope & Limitation Boundaries) ---
+            elif rel == "CONSTRAINS":
+                # Rule: Constraint Source Control (Only scope-defining components can enforce limits)
+                allowed_sources = {"BOUNDARY", "CONCEPT", "GROUP", "FOCUS"}
+                if s_type not in allowed_sources:
+                    errors.append(f"Edge[{e_id}]: {s_type}[{src_id}] is not an allowed source for CONSTRAINS.")
+
+                # Rule: Static Reference Shield (Scope constraints cannot mutate raw source records or portals)
+                if t_type in {"RESOURCE", "NAVIGATION"}:
+                    errors.append(f"Edge[{e_id}]: Boundary Constraint cannot restrict static references or portals like {t_type}[{tgt_id}].")
+
+            # --- Sub-Logic: Functional & Layout Containers ---
+            # Rule: Container Isolation (GROUP nodes act as macro wrappers; no physical causality allowed)
+            if s_type == "GROUP" and rel not in {"REF", "LINK"}:
+                errors.append(f"Edge[{e_id}]: GROUP[{src_id}] is a spatial container; only REF or LINK is permitted.")
 
         return errors
 
@@ -798,8 +783,6 @@ class SpatialLocateTool(BaseTool):
             graph_state = ConceptualGraph(**kwargs.get('existing_graph_state', {}))
             existing_node_ids = list(graph_state.nodes.keys())
 
-            self.logger.debug(f"expansion_data: {kwargs.get('expansion_data', {})}")
-            self.logger.debug(f"existing_graph_state: {kwargs.get('existing_graph_state', {})}")
             if not expansion.nodes:
                 return json.dumps({"error": "Expansion batch is empty."})
 
@@ -868,6 +851,10 @@ class SpatialLocateTool(BaseTool):
             return graph_state.model_dump_json()
 
         except Exception as e:
+            self.logger.warning('==== expansion_data ====')
+            self.logger.warning(kwargs.get('expansion_data', {}))
+            self.logger.warning('==== existing_graph_state ====')
+            self.logger.warning(kwargs.get('existing_graph_state', {}))
             self.logger.error(f"SpatialLocateTool error: {str(e)}")
             return json.dumps({"error": str(e)})
 
@@ -937,14 +924,14 @@ class SpatialLocateTool(BaseTool):
         reciprocal_slope = (target_position.x - source_position.x) / (target_position.y - source_position.y)
         if abs(reciprocal_slope) < self.aspect_ratio:
             if target_position.y > source_position.y:
-                return NodeHandle.SOUTH, NodeHandle.NORTH
+                return NodeHandle.BOTTOM, NodeHandle.TOP
             else:
-                return NodeHandle.NORTH, NodeHandle.SOUTH
+                return NodeHandle.TOP, NodeHandle.BOTTOM
         else:
             if target_position.x > source_position.x:
-                return NodeHandle.EAST, NodeHandle.WEST
+                return NodeHandle.RIGHT, NodeHandle.LEFT
             else:
-                return NodeHandle.WEST, NodeHandle.EAST
+                return NodeHandle.LEFT, NodeHandle.RIGHT
 
     def _calculate_position_offset(
         self,
