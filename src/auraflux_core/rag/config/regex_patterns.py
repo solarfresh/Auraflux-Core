@@ -1,11 +1,7 @@
 import re
 from typing import List, Pattern
-from pydantic import BaseModel, Field
 
-
-import re
-from typing import Pattern
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AnaphoraPatternCollection(BaseModel):
@@ -13,26 +9,25 @@ class AnaphoraPatternCollection(BaseModel):
     Strongly-typed collection of compiled Regular Expressions for detecting
     anaphoric pronouns, demonstratives, and discourse connectors across English and CJK text.
     """
-    # Detects leading closing quotes/brackets followed by strong demonstratives or discourse markers
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     anaphora_reference_pattern: Pattern = Field(
         default=re.compile(
-            r'^\s*(?:[」』”’"\'\）\]]*\s*)?'  # Matches optional leading closing quotes or brackets
+            r'^\s*(?:[」』”’"\'\）\]]*\s*)?'  # 可選的前置引號/括號與空白
             r'(?:'
-            # CJK Demonstratives & References (中文強指代詞與脈絡錨點)
+            # 1. CJK 指代詞與脈絡錨點
             r'這[句項種個本篇案點話]|此[項個點類言]|上述|前述|該[項個條]|這些|那些|對此|'
             r'因此|結果|總結來說|換句話說|如前所述|'
-            # English Demonstratives & Discourse Anchors
-            r'this\s+|these\s+|those\s+|such\s+|therefore|as\s+a\s+result|however|'
-            r'in\s+other\s+words|for\s+instance|in\s+addition|furthermore'
+            # 2. English Demonstratives & Discourse Anchors
+            r'\bthis\b|\bthese\b|\bthose\b|\bsuch\b|\btherefore\b|\bas\s+a\s+result\b|\bhowever\b|'
+            r'\bin\s+other\s+words\b|\bfor\s+instance\b|\bin\s+addition\b|\bfurthermore\b'  # 修復: 補上缺少的運算子並加上 \b
             r')'
             r'[\s\n\u4e00-\u9fff,，:\.\-\(（]',
             re.IGNORECASE
         ),
         description="Matches text starting with strong anaphoric pronouns or contextually dependent connectors."
     )
-
-    class Config:
-        arbitrary_types_allowed = True
 
 
 class HeaderPatternCollection(BaseModel):
@@ -96,8 +91,7 @@ class HeaderPatternCollection(BaseModel):
         description="Matches standard English standalone structural section words"
     )
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def get_all_patterns(self) -> List[Pattern]:
         """Returns all compiled regular expressions as a list."""
@@ -123,8 +117,7 @@ class SentencePatternCollection(BaseModel):
         description="Splits text into discrete sentences using CJK/Latin terminators and newlines."
     )
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # Default singleton instance for general usage

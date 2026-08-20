@@ -2,6 +2,8 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from auraflux_core.rag.chunkers.base import BaseChunker
+from auraflux_core.rag.chunkers.utils import (estimate_tokens,
+                                              split_paragraphs_bilingual)
 from auraflux_core.rag.config.regex_patterns import (DEFAULT_ANAPHORA_PATTERNS,
                                                      DEFAULT_SENTENCE_PATTERNS,
                                                      AnaphoraPatternCollection,
@@ -60,7 +62,7 @@ class SentenceSlidingWindow:
         current_len = 0
 
         for sentence in sentences:
-            sent_len = len(sentence)
+            sent_len = estimate_tokens(sentence)
             if current_len + sent_len > self.max_chunk_size and current_sentences:
                 chunks.append(" ".join(current_sentences).strip())
 
@@ -135,9 +137,9 @@ class ParagraphDynamicChunker(BaseChunker):
 
     def __init__(
         self,
-        max_chunk_size: int = 800,
-        min_chunk_size: int = 150,
-        chunk_overlap: int = 100,
+        max_chunk_size: int = 256,
+        min_chunk_size: int = 64,
+        chunk_overlap: int = 16,
         anaphora_detector: Optional[AnaphoraDetector] = None,
         sentence_window: Optional[SentenceSlidingWindow] = None,
         config: Optional[Dict[str, Any]] = None
@@ -153,11 +155,6 @@ class ParagraphDynamicChunker(BaseChunker):
             max_chunk_size=max_chunk_size,
             chunk_overlap=chunk_overlap
         )
-
-    def _split_into_paragraphs(self, text: str) -> List[str]:
-        """Splits raw section text into structural paragraph units."""
-        raw_paragraphs = re.split(r'\n\s*\n|\n', text)
-        return [p.strip() for p in raw_paragraphs if p.strip()]
 
     def _join_texts(self, text_list: List[str]) -> str:
         """Joins text segments with appropriate line breaks based on language context."""
@@ -198,78 +195,68 @@ class ParagraphDynamicChunker(BaseChunker):
         )
 
     def chunk_section(self, section: StandardSection) -> List[StandardChunk]:
-        """
-        Executes section chunking workflow.
-
-        Algorithm Flow:
-        1. Greedily aggregates paragraphs until max_chunk_size is reached.
-        2. Upon capacity overflow, inspects the next paragraph via AnaphoraDetector.
-        3. If anaphora is detected, rejects paragraph boundary, merges buffer + paragraph,
-           and delegates re-segmentation to SentenceSlidingWindow.
-        4. Otherwise, safely emits current buffer and resets for the next chunk.
-        """
         text = section.text.strip()
         if not text:
             return []
 
-        raw_paragraphs = self._split_into_paragraphs(text)
+        # 1. Use bilingual-compatible paragraph splitting
+        raw_paragraphs = split_paragraphs_bilingual(text)
         if not raw_paragraphs:
             return []
 
         chunk_data_list: List[StandardChunk] = []
         chunk_idx = 0
         current_buffer: List[str] = []
-        current_buffer_len = 0
+        current_buffer_tokens = 0
 
-        i = 0
-        n = len(raw_paragraphs)
+        for para in raw_paragraphs:
+            # 2. Accurately estimate token length for bilingual text
+            para_tokens = estimate_tokens(para)
 
-        while i < n:
-            para = raw_paragraphs[i]
-            para_len = len(para)
+            # Case A: A single paragraph inherently exceeds max_chunk_size
+            if para_tokens > self.max_chunk_size:
+                if current_buffer:
+                    chunk_str = self._join_texts(current_buffer)
+                    chunk_data_list.append(self._create_chunk_data(section, chunk_str, chunk_idx))
+                    chunk_idx += 1
+                    current_buffer = []
+                    current_buffer_tokens = 0
 
-            # Case 1: Paragraph fits within capacity -> Accumulate greedily
-            if current_buffer_len + para_len <= self.max_chunk_size:
-                current_buffer.append(para)
-                current_buffer_len += para_len
-                i += 1
+                # Delegate fallback sentence-level sliding window splitting
+                sub_chunks, tail_buffer = self.sentence_window.split(para)
+                for t in sub_chunks:
+                    chunk_data_list.append(self._create_chunk_data(section, t, chunk_idx))
+                    chunk_idx += 1
+                if tail_buffer:
+                    current_buffer = [tail_buffer]
+                    current_buffer_tokens = estimate_tokens(tail_buffer)
                 continue
 
-            # Case 2: Capacity reached -> Perform anaphora inspection
-            if self.anaphora_detector.starts_with_anaphora(para) and current_buffer:
-                # Merge current buffer with incoming anaphoric paragraph
-                combined_block = self._join_texts(current_buffer + [para])
-
-                # Delegate sentence-level sliding window segmentation
-                sub_chunks, tail_buffer = self.sentence_window.split(combined_block)
-
-                for t in sub_chunks:
-                    chunk_data_list.append(self._create_chunk_data(section, t, chunk_idx))
+            # Case B: Adding the current paragraph exceeds max_chunk_size limit
+            if current_buffer_tokens + para_tokens > self.max_chunk_size:
+                # If anaphora is detected, allow a 15% overflow tolerance to preserve context
+                if self.anaphora_detector.starts_with_anaphora(para) and (current_buffer_tokens + para_tokens <= self.max_chunk_size * 1.15):
+                    current_buffer.append(para)
+                    chunk_str = self._join_texts(current_buffer)
+                    chunk_data_list.append(self._create_chunk_data(section, chunk_str, chunk_idx))
                     chunk_idx += 1
-
-                # Re-initialize buffer with sentence window overlap tail
-                current_buffer = [tail_buffer] if tail_buffer else []
-                current_buffer_len = len(tail_buffer) if tail_buffer else 0
-                i += 1
+                    current_buffer = []
+                    current_buffer_tokens = 0
+                else:
+                    # Flush the existing buffer normally
+                    chunk_str = self._join_texts(current_buffer)
+                    chunk_data_list.append(self._create_chunk_data(section, chunk_str, chunk_idx))
+                    chunk_idx += 1
+                    current_buffer = [para]
+                    current_buffer_tokens = para_tokens
             else:
-                # Case 3: Safe boundary -> Emit accumulated buffer as chunk
-                chunk_str = self._join_texts(current_buffer)
-                chunk_data_list.append(self._create_chunk_data(section, chunk_str, chunk_idx))
-                chunk_idx += 1
+                # Case C: Capacity available; greedily aggregate paragraphs
+                current_buffer.append(para)
+                current_buffer_tokens += para_tokens
 
-                current_buffer = []
-                current_buffer_len = 0
-
-        # Flush remaining buffer content
+        # Flush any remaining buffer at the end
         if current_buffer:
             chunk_str = self._join_texts(current_buffer)
-            # Final safety check for single oversized remaining buffer
-            if len(chunk_str) > self.max_chunk_size:
-                sub_chunks, _ = self.sentence_window.split(chunk_str)
-                for t in sub_chunks:
-                    chunk_data_list.append(self._create_chunk_data(section, t, chunk_idx))
-                    chunk_idx += 1
-            else:
-                chunk_data_list.append(self._create_chunk_data(section, chunk_str, chunk_idx))
+            chunk_data_list.append(self._create_chunk_data(section, chunk_str, chunk_idx))
 
         return chunk_data_list
