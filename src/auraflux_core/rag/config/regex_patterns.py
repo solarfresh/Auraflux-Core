@@ -3,6 +3,38 @@ from typing import List, Pattern
 from pydantic import BaseModel, Field
 
 
+import re
+from typing import Pattern
+from pydantic import BaseModel, Field
+
+
+class AnaphoraPatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for detecting
+    anaphoric pronouns, demonstratives, and discourse connectors across English and CJK text.
+    """
+    # Detects leading closing quotes/brackets followed by strong demonstratives or discourse markers
+    anaphora_reference_pattern: Pattern = Field(
+        default=re.compile(
+            r'^\s*(?:[」』”’"\'\）\]]*\s*)?'  # Matches optional leading closing quotes or brackets
+            r'(?:'
+            # CJK Demonstratives & References (中文強指代詞與脈絡錨點)
+            r'這[句項種個本篇案點話]|此[項個點類言]|上述|前述|該[項個條]|這些|那些|對此|'
+            r'因此|結果|總結來說|換句話說|如前所述|'
+            # English Demonstratives & Discourse Anchors
+            r'this\s+|these\s+|those\s+|such\s+|therefore|as\s+a\s+result|however|'
+            r'in\s+other\s+words|for\s+instance|in\s+addition|furthermore'
+            r')'
+            r'[\s\n\u4e00-\u9fff,，:\.\-\(（]',
+            re.IGNORECASE
+        ),
+        description="Matches text starting with strong anaphoric pronouns or contextually dependent connectors."
+    )
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
 class HeaderPatternCollection(BaseModel):
     """
     Strongly-typed collection of compiled Regular Expressions for implicit header detection.
@@ -80,5 +112,22 @@ class HeaderPatternCollection(BaseModel):
         ]
 
 
+class SentencePatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for sentence segmentation.
+    Supports CJK (Chinese, Japanese, Korean) and Western sentence terminators and line breaks.
+    """
+    # Standard sentence terminators including CJK and Latin punctuation, plus inline newlines
+    default_sentence_splitter: Pattern = Field(
+        default=re.compile(r'([^。！？.!?\n]+[。！？.!?\n]*(?:[」』”’"\'）\]]*))'),
+        description="Splits text into discrete sentences using CJK/Latin terminators and newlines."
+    )
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
 # Default singleton instance for general usage
+DEFAULT_ANAPHORA_PATTERNS = AnaphoraPatternCollection()
 DEFAULT_HEADER_PATTERNS = HeaderPatternCollection()
+DEFAULT_SENTENCE_PATTERNS = SentencePatternCollection()

@@ -2,11 +2,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import chardet
-from parsers.base import BaseParser
-from schemas.parser import StandardSection, TXTSectionMetadata
 
 from auraflux_core.rag.config.regex_patterns import (DEFAULT_HEADER_PATTERNS,
                                                      HeaderPatternCollection)
+from auraflux_core.rag.parsers.base import BaseParser
+from auraflux_core.rag.schemas.parser import (StandardSection,
+                                              TXTSectionMetadata)
 
 
 class TXTParser(BaseParser):
