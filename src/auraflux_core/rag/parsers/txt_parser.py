@@ -1,11 +1,11 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import chardet
 
 from auraflux_core.rag.config.regex_patterns import (DEFAULT_HEADER_PATTERNS,
                                                      HeaderPatternCollection)
-from auraflux_core.rag.parsers.base import BaseParser
+from auraflux_core.rag.parsers.base import BaseParser, FileInput
 from auraflux_core.rag.schemas.parser import (StandardSection,
                                               TXTSectionMetadata)
 
@@ -13,10 +13,7 @@ from auraflux_core.rag.schemas.parser import (StandardSection,
 class TXTParser(BaseParser):
     """
     Parser implementation for plain text (.txt) files.
-    Features:
-    1. Automatic encoding detection with safe fallbacks (chardet -> UTF-8 -> Big5/GBK).
-    2. Multi-language (English & Chinese) implicit structure mining via HeaderPatternCollection.
-    3. Structural section output mapped to StandardSection with typed TXTSectionMetadata.
+    Supports file paths, raw bytes, and file streams directly.
     """
 
     def __init__(
@@ -25,25 +22,17 @@ class TXTParser(BaseParser):
         patterns: Optional[HeaderPatternCollection] = None
     ):
         super().__init__(config)
-        # Inject custom multi-language pattern collection or fallback to system defaults
         self.patterns = patterns or DEFAULT_HEADER_PATTERNS
         self._compiled_patterns = self.patterns.get_all_patterns()
-
-        # Terminal punctuations for Chinese & English to avoid misidentifying sentence ends as headers
         self.terminal_punctuations = ('。', '！', '？', '.', '!', '?', ':', '：', ';', '；')
 
-    def _detect_and_read_encoding(self, file_path: Path) -> Tuple[str, str]:
+    def _detect_and_decode_bytes(self, raw_bytes: bytes) -> Tuple[str, str]:
         """
-        Detects file encoding automatically using chardet with fallback mechanisms.
-        :return: Tuple of (decoded_content_string, used_encoding_name)
+        Detects encoding automatically using chardet with fallback mechanisms.
         """
-        raw_bytes = file_path.read_bytes()
-
-        # Detect encoding
         detection = chardet.detect(raw_bytes)
         detected_encoding = detection.get("encoding") or "utf-8"
 
-        # Sequential fallbacks for Traditional/Simplified Chinese and general UTF formats
         encodings_to_try = [detected_encoding, "utf-8", "utf-8-sig", "big5", "gbk", "cp950"]
 
         for enc in encodings_to_try:
@@ -53,44 +42,77 @@ class TXTParser(BaseParser):
             except (UnicodeDecodeError, TypeError):
                 continue
 
-        # Last resort: decode as utf-8 and ignore corrupted byte sequences
         return raw_bytes.decode("utf-8", errors="ignore"), "utf-8-lossy"
 
+    def _resolve_to_bytes(self, file_input: FileInput) -> bytes:
+        """
+        Resolves various file input types into a unified raw binary bytes object.
+
+        This helper method normalizes input payloads—whether provided as file paths,
+        raw bytes, or active file streams—into a consistent `bytes` format required for
+        subsequent encoding detection and content parsing.
+
+        Args:
+            file_input (FileInput): The target document input (Path, string, bytes,
+                or file-like stream object).
+
+        Returns:
+            bytes: Raw binary content of the document.
+
+        Raises:
+            FileNotFoundError: If the provided path string or Path object does not exist.
+            TypeError: If the input type is unsupported.
+        """
+        # Case 1: Input is a string path or Path instance
+        if isinstance(file_input, (str, Path)):
+            path = Path(file_input)
+            if not path.exists():
+                raise FileNotFoundError(f"File not found: {file_input}")
+            return path.read_bytes()
+
+        # Case 2: Input is already raw binary bytes
+        elif isinstance(file_input, bytes):
+            return file_input
+
+        # Case 3: Input is a readable stream (e.g., BytesIO, Django File, or Open File)
+        elif hasattr(file_input, "read"):
+            content = file_input.read()
+            return content if isinstance(content, bytes) else content.encode("utf-8")
+
+        # Case 4: Fallback for invalid/unsupported input types
+        else:
+            raise TypeError(f"Unsupported input type: {type(file_input)}")
+
     def _is_implicit_heading(self, line: str) -> bool:
-        """
-        Determines whether a line qualifies as an implicit heading using multi-language regex library
-        or short visual isolated line heuristics.
-        """
         line_str = line.strip()
         if not line_str:
             return False
 
-        # Rule A: Match against loaded Chinese & English Regex pattern library
         for pattern in self._compiled_patterns:
             if pattern.match(line_str):
                 return True
 
-        # Rule B: Short isolated visual line without Chinese or English terminal punctuation marks
         if len(line_str) < 40 and not line_str.endswith(self.terminal_punctuations):
             return True
 
         return False
 
-    def parse(self, file_path: str | Path) -> List[StandardSection]:
+    def parse(
+        self,
+        file_input: FileInput,
+        filename: Optional[str] = None
+    ) -> List[StandardSection]:
         """
-        Parses a .txt file into a list of StandardSection Pydantic models.
-
-        :param file_path: Target .txt file path
-        :return: List of validated StandardSection instances
+        Parses a .txt source into a list of StandardSection Pydantic models.
         """
-        path = Path(file_path)
-        content, used_encoding = self._detect_and_read_encoding(path)
+        source_name = filename or self._extract_source_name(file_input)
+        raw_bytes = self._resolve_to_bytes(file_input)
+        content, used_encoding = self._detect_and_decode_bytes(raw_bytes)
 
-        # Normalize Windows/Unix line breaks
         lines = content.replace('\r\n', '\n').split('\n')
 
         sections: List[StandardSection] = []
-        current_breadcrumb: List[str] = [path.name]
+        current_breadcrumb: List[str] = [source_name]
         current_title: str = "Preamble"
         current_lines: List[str] = []
         section_counter: int = 1
@@ -100,9 +122,7 @@ class TXTParser(BaseParser):
             if not line_str:
                 continue
 
-            # Check if current line triggers a new section heading
             if self._is_implicit_heading(line_str):
-                # Flush previous accumulated text into a StandardSection if content exists
                 if current_lines:
                     full_text = "\n".join(current_lines).strip()
                     if full_text:
@@ -113,7 +133,7 @@ class TXTParser(BaseParser):
                                 title=current_title,
                                 text=full_text,
                                 metadata=TXTSectionMetadata(
-                                    source_file=path.name,
+                                    source_file=source_name,
                                     file_type="txt",
                                     char_count=len(full_text),
                                     encoding=used_encoding
@@ -123,14 +143,12 @@ class TXTParser(BaseParser):
                         section_counter += 1
                         current_lines = []
 
-                # Update heading title and breadcrumb trail
                 current_title = line_str
-                current_breadcrumb = [path.name, line_str]
+                current_breadcrumb = [source_name, line_str]
                 continue
 
             current_lines.append(line_str)
 
-        # Flush final remaining buffer lines
         if current_lines:
             full_text = "\n".join(current_lines).strip()
             if full_text:
@@ -141,7 +159,7 @@ class TXTParser(BaseParser):
                         title=current_title,
                         text=full_text,
                         metadata=TXTSectionMetadata(
-                            source_file=path.name,
+                            source_file=source_name,
                             file_type="txt",
                             char_count=len(full_text),
                             encoding=used_encoding
