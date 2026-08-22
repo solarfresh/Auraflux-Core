@@ -106,6 +106,20 @@ class HeaderPatternCollection(BaseModel):
         ]
 
 
+class KeywordPatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for keyword and triple processing.
+    Handles enumeration delimiters (CJK and Western) and trailing punctuation stripping.
+    """
+    # Pattern to match and split enumerated terms (commas, ideographic commas, 'and', 'as well as', Chinese '以及')
+    enumeration_splitter: Pattern = Field(
+        default=re.compile(r',|，|、|\s+and\s+|\s+as well as\s+|\s+以及\s+', re.IGNORECASE),
+        description="Splits enumerated terms into individual items using CJK and Western conjunctions/punctuation."
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 # ----------------------------------------------------------------------
 # Compiled Noise Patterns Collection
 # ----------------------------------------------------------------------
@@ -146,6 +160,7 @@ class SentencePatternCollection(BaseModel):
 
 # Default singleton instance for general usage
 DEFAULT_ANAPHORA_PATTERNS = AnaphoraPatternCollection()
+DEFAULT_KEYWORD_PATTERNS = KeywordPatternCollection()
 DEFAULT_HEADER_PATTERNS = HeaderPatternCollection()
 DEFAULT_NOISE_PATTERNS = NoisePatternCollection()
 DEFAULT_SENTENCE_PATTERNS = SentencePatternCollection()

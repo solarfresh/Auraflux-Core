@@ -78,7 +78,7 @@ class DynamicChunker(BaseChunker):
 
         # Layer 4: Fact & Evidence Initialization
         evidence = ChunkEvidence(
-            excerptText=chunk_text,
+            excerpt_text=chunk_text,
             location=location_str
         )
 

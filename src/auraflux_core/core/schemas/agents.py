@@ -22,6 +22,7 @@ class AgentConfig(BaseModel):
     model: str
     lang: str = 'en'
     system_message: str | None = None
+    output_format: Literal['TEXT', 'JSON'] = 'TEXT'
 
     thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
 

@@ -83,7 +83,7 @@ class ChunkEvidence(BaseModel):
     """
     Raw text snippets and location pointers for grounding and auditability.
     """
-    excerptText: str = Field(..., description="Exact verbatim excerpt from the document (100–300 words)")
+    excerpt_text: str = Field(..., description="Exact verbatim excerpt from the document (100–300 words)")
     location: str = Field(..., description="Location pointer within source document (e.g., 'Page 5, Section 3.2')")
 
 
@@ -94,7 +94,7 @@ class ChunkVectors(BaseModel):
     """
     questionVector: Optional[List[float]] = Field(None, description="Embedding vector for `alignment.targetQuestion`")
     conceptVector: Optional[List[float]] = Field(None, description="Embedding vector for `concept.title` & `concept.description`")
-    evidenceVector: Optional[List[float]] = Field(None, description="Embedding vector for `evidence.excerptText`")
+    evidenceVector: Optional[List[float]] = Field(None, description="Embedding vector for `evidence.excerpt_text`")
 
 
 # --- Unified Repository Chunk Entity ---

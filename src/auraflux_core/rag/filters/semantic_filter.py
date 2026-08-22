@@ -22,10 +22,10 @@ class GroundedInEvidenceFilter(BaseFilter[StandardChunk]):
         if keywords is None:
             return False
 
-        if not evidence.excerptText:
+        if not evidence.excerpt_text:
             return False
 
-        text_lower = evidence.excerptText.lower()
+        text_lower = evidence.excerpt_text.lower()
 
         # Check if at least one triple subject/object exists in the raw text
         has_grounded_triple = any(
