@@ -106,6 +106,30 @@ class HeaderPatternCollection(BaseModel):
         ]
 
 
+# ----------------------------------------------------------------------
+# Compiled Noise Patterns Collection
+# ----------------------------------------------------------------------
+class NoisePatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for noise detection.
+    Matches page numbers, headers, footers, copyrights, and table of contents entries.
+    """
+    page_number: Pattern = Field(
+        default=re.compile(r'Page\s+\d+\s+of\s+\d+|第\s*\d+\s*頁/共\s*\d+\s*頁', re.IGNORECASE),
+        description="Matches standard page numbering formats (e.g., 'Page 1 of 5', '第 1 頁/共 5 頁')."
+    )
+    copyright_notice: Pattern = Field(
+        default=re.compile(r'All\s+Rights\s+Reserved|Copyright\s+©|版權所有', re.IGNORECASE),
+        description="Matches legal copyright and rights reservation statements."
+    )
+    table_of_contents: Pattern = Field(
+        default=re.compile(r'^\s*(Table\s+of\s+Contents|目\s*錄)\s*$', re.IGNORECASE),
+        description="Matches Table of Contents header lines."
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 class SentencePatternCollection(BaseModel):
     """
     Strongly-typed collection of compiled Regular Expressions for sentence segmentation.
@@ -123,4 +147,5 @@ class SentencePatternCollection(BaseModel):
 # Default singleton instance for general usage
 DEFAULT_ANAPHORA_PATTERNS = AnaphoraPatternCollection()
 DEFAULT_HEADER_PATTERNS = HeaderPatternCollection()
+DEFAULT_NOISE_PATTERNS = NoisePatternCollection()
 DEFAULT_SENTENCE_PATTERNS = SentencePatternCollection()
