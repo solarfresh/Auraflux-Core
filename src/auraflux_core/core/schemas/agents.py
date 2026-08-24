@@ -1,6 +1,6 @@
 from enum import Enum
 
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
 
