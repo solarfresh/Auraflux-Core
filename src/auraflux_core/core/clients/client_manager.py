@@ -54,24 +54,27 @@ class ClientManager:
         Instantiates all necessary LLM handlers based on the provided configuration.
         """
         for provider_config in self.config.providers:
-            api_key = provider_config.api_key
-            if not api_key and provider_config.type not in ('vllm',):
-                raise ValueError(f"API key for provider '{provider_config.id}' is not provided.")
+            self.instantiate_handler_by_config(provider_config)
 
-            # vLLM is an optional dependency
-            # if using_vllm_handler and model_config.provider_type == "VLLM":
-            #     handler_instance = VLLMHandler(config=model_config)
-            #     await handler_instance.ainit()
+    def instantiate_handler_by_config(self, provider_config):
+        api_key = provider_config.api_key
+        if not api_key and provider_config.type not in ('vllm',):
+            raise ValueError(f"API key for provider '{provider_config.id}' is not provided.")
 
-            if provider_config.type == "GOOGLE":
-                handler_instance = GeminiHandler(config=provider_config)
+        # vLLM is an optional dependency
+        # if using_vllm_handler and model_config.provider_type == "VLLM":
+        #     handler_instance = VLLMHandler(config=model_config)
+        #     await handler_instance.ainit()
 
-            if provider_config.type == "OPENAI":
-                handler_instance = OpenAIHandler(config=provider_config)
-            # Add other handlers here as they are implemented
+        if provider_config.type == "GOOGLE":
+            handler_instance = GeminiHandler(config=provider_config)
 
-            if handler_instance:
-                self.handlers[provider_config.id] = handler_instance
+        if provider_config.type == "OPENAI":
+            handler_instance = OpenAIHandler(config=provider_config)
+        # Add other handlers here as they are implemented
+
+        if handler_instance:
+            self.handlers[provider_config.id] = handler_instance
 
     async def _dispatch_requests(self):
         """Dispatches requests from the queue to the correct handler."""

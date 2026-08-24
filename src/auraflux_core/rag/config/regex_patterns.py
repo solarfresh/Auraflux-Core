@@ -1,0 +1,166 @@
+import re
+from typing import List, Pattern
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class AnaphoraPatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for detecting
+    anaphoric pronouns, demonstratives, and discourse connectors across English and CJK text.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    anaphora_reference_pattern: Pattern = Field(
+        default=re.compile(
+            r'^\s*(?:[」』”’"\'\）\]]*\s*)?'  # 可選的前置引號/括號與空白
+            r'(?:'
+            # 1. CJK 指代詞與脈絡錨點
+            r'這[句項種個本篇案點話]|此[項個點類言]|上述|前述|該[項個條]|這些|那些|對此|'
+            r'因此|結果|總結來說|換句話說|如前所述|'
+            # 2. English Demonstratives & Discourse Anchors
+            r'\bthis\b|\bthese\b|\bthose\b|\bsuch\b|\btherefore\b|\bas\s+a\s+result\b|\bhowever\b|'
+            r'\bin\s+other\s+words\b|\bfor\s+instance\b|\bin\s+addition\b|\bfurthermore\b'  # 修復: 補上缺少的運算子並加上 \b
+            r')'
+            r'[\s\n\u4e00-\u9fff,，:\.\-\(（]',
+            re.IGNORECASE
+        ),
+        description="Matches text starting with strong anaphoric pronouns or contextually dependent connectors."
+    )
+
+
+class HeaderPatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for implicit header detection.
+    Supports both English and Chinese document layout conventions.
+    """
+    # 1. Markdown syntax (# Title, ## Subtitle)
+    markdown_headers: Pattern = Field(
+        default=re.compile(r'^#{1,6}\s+.*$'),
+        description="Matches Markdown heading syntaxes (# Title, ## Subtitle)"
+    )
+
+    # 2. Chinese Chapters & Legal Terms (第一章, 第 2 條, 附錄一)
+    chinese_chapters: Pattern = Field(
+        default=re.compile(r'^(?:第[0-9一二三四五六七八九十百千]+\s*[章節條項編]|附錄[一二三四五六七八九十0-9]*)\s*.*$'),
+        description="Matches Chinese legal/chapter/appendix prefixes (第一章, 第 2 條, 附錄 A)"
+    )
+
+    # 3. English Chapters, Sections & Appendixes (Chapter 1, Section 2.1, Appendix A)
+    english_chapters: Pattern = Field(
+        default=re.compile(
+            r'^(?i:'  # Case-insensitive flag
+            r'chapter\s+[0-9a-z]+|'
+            r'section\s+[0-9a-z\.]+|'
+            r'part\s+[0-9a-z]+|'
+            r'appendix\s+[a-z0-9]+|'
+            r'article\s+[0-9a-z]+'
+            r')(?:\s*[:\.-]\s*.*|\s+.*)?$'
+        ),
+        description="Matches English structural headers (Chapter 1, Section 2.1, Appendix A, Article IV)"
+    )
+
+    # 4. Numeric Sections (1., 1.1, 1.1.2)
+    numeric_sections: Pattern = Field(
+        default=re.compile(r'^[0-9]+(?:\.[0-9]+)*\s+.*$'),
+        description="Matches hierarchical numeric section headers (1., 1.1, 1.1.2)"
+    )
+
+    # 5. Enumerate Listings - Chinese & English (一、, A., (a), 1))
+    listings: Pattern = Field(
+        default=re.compile(r'^(?:[一二三四五六七八九十]+[、,]|[A-Za-z0-9]+[\.\)])\s+.*$'),
+        description="Matches Chinese and English enumeration listings (一、, A., 1), a.)"
+    )
+
+    # 6. Bracketed Section Headers ([摘要], (二), [Note], (1))
+    bracket_sections: Pattern = Field(
+        default=re.compile(r'^(?:\[[^\]]+\]|\（[0-9一二三四五六七八九十]+\）|\([0-9a-zA-Z]+\))\s*.*$'),
+        description="Matches bracketed section tags ([Summary], （一）, (a), [Note])"
+    )
+
+    # 7. Common English Document Structural Markers (Overview, Executive Summary)
+    english_keywords: Pattern = Field(
+        default=re.compile(
+            r'^(?i:'
+            r'abstract|introduction|overview|background|executive summary|'
+            r'table of contents|scope|prerequisites|architecture|conclusion|'
+            r'references|acknowledgments|faq|changelog'
+            r')(?:\s*[:\.-]\s*.*)?$'
+        ),
+        description="Matches standard English standalone structural section words"
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def get_all_patterns(self) -> List[Pattern]:
+        """Returns all compiled regular expressions as a list."""
+        return [
+            self.markdown_headers,
+            self.chinese_chapters,
+            self.english_chapters,
+            self.numeric_sections,
+            self.listings,
+            self.bracket_sections,
+            self.english_keywords
+        ]
+
+
+class KeywordPatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for keyword and triple processing.
+    Handles enumeration delimiters (CJK and Western) and trailing punctuation stripping.
+    """
+    # Pattern to match and split enumerated terms (commas, ideographic commas, 'and', 'as well as', Chinese '以及')
+    enumeration_splitter: Pattern = Field(
+        default=re.compile(r',|，|、|\s+and\s+|\s+as well as\s+|\s+以及\s+', re.IGNORECASE),
+        description="Splits enumerated terms into individual items using CJK and Western conjunctions/punctuation."
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+# ----------------------------------------------------------------------
+# Compiled Noise Patterns Collection
+# ----------------------------------------------------------------------
+class NoisePatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for noise detection.
+    Matches page numbers, headers, footers, copyrights, and table of contents entries.
+    """
+    page_number: Pattern = Field(
+        default=re.compile(r'Page\s+\d+\s+of\s+\d+|第\s*\d+\s*頁/共\s*\d+\s*頁', re.IGNORECASE),
+        description="Matches standard page numbering formats (e.g., 'Page 1 of 5', '第 1 頁/共 5 頁')."
+    )
+    copyright_notice: Pattern = Field(
+        default=re.compile(r'All\s+Rights\s+Reserved|Copyright\s+©|版權所有', re.IGNORECASE),
+        description="Matches legal copyright and rights reservation statements."
+    )
+    table_of_contents: Pattern = Field(
+        default=re.compile(r'^\s*(Table\s+of\s+Contents|目\s*錄)\s*$', re.IGNORECASE),
+        description="Matches Table of Contents header lines."
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class SentencePatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for sentence segmentation.
+    Supports CJK (Chinese, Japanese, Korean) and Western sentence terminators and line breaks.
+    """
+    # Standard sentence terminators including CJK and Latin punctuation, plus inline newlines
+    default_sentence_splitter: Pattern = Field(
+        default=re.compile(r'([^。！？.!?\n]+[。！？.!?\n]*(?:[」』”’"\'）\]]*))'),
+        description="Splits text into discrete sentences using CJK/Latin terminators and newlines."
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+# Default singleton instance for general usage
+DEFAULT_ANAPHORA_PATTERNS = AnaphoraPatternCollection()
+DEFAULT_KEYWORD_PATTERNS = KeywordPatternCollection()
+DEFAULT_HEADER_PATTERNS = HeaderPatternCollection()
+DEFAULT_NOISE_PATTERNS = NoisePatternCollection()
+DEFAULT_SENTENCE_PATTERNS = SentencePatternCollection()

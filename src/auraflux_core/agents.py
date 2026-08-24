@@ -6,8 +6,15 @@ from auraflux_core.canvases.schemas import (GraphSynthesistAgentConfig,
                                             SpatialLocateToolConfig)
 from auraflux_core.core.agents.generic_agent import GenericAgent
 from auraflux_core.core.schemas.agents import AgentConfig
+from auraflux_core.rag.agents.keywords_extractor import ExtractKeywordsAgent
 
-Agent = Union[GraphSynthesistAgent, GenericAgent]
+Agent = Union[
+    ExtractKeywordsAgent,
+    GraphSynthesistAgent,
+    KnowledgeArchitect,
+    GenericAgent,
+    OntologyAuditor
+]
 
 
 class AgentImplementation(NamedTuple):
@@ -17,6 +24,10 @@ class AgentImplementation(NamedTuple):
 
 # Central Registry
 AGENT_REGISTRY: Dict[str, AgentImplementation] = {
+    'ExtractKeywordsAgent': AgentImplementation(
+        agent_class=ExtractKeywordsAgent,
+        config_class=AgentConfig
+    ),
     'GraphSynthesistAgent': AgentImplementation(
         agent_class=GraphSynthesistAgent,
         config_class=GraphSynthesistAgentConfig,

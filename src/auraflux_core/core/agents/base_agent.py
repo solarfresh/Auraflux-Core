@@ -228,9 +228,13 @@ class BaseAgent(ABC):
         return json_object
 
     def postprocess_llm_output(self, output_string: str) -> str:
+        if self.config.output_format == 'JSON':
+            json_object = self._parse_json_output(output_string)
+            return json.dumps(json_object, ensure_ascii=False)
+
         return output_string
 
-    def _parse_json_output(self, output_string: str) -> str:
+    def _parse_json_output(self, output_string: str) -> Dict:
         json_pattern = r"```json\s*(\{.*\})\s*```"
         match = re.search(json_pattern, output_string, re.DOTALL)
         if match:

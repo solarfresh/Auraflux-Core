@@ -1,6 +1,6 @@
 from enum import Enum
 
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
 
@@ -22,6 +22,7 @@ class AgentConfig(BaseModel):
     model: str
     lang: str = 'en'
     system_message: str | None = None
+    output_format: Literal['TEXT', 'JSON'] = 'TEXT'
 
     thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
 
