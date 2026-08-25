@@ -187,7 +187,7 @@ class ParagraphDynamicChunker(BaseChunker):
         return StandardChunk(
             id=f"{section.section_id}_pchk_{chunk_idx:03d}",
             fileId=getattr(section.metadata, "source_file", "unknown_file"),
-            evidence=ChunkEvidence(excerpt_text=text_content, location=self._build_location_string(section)),
+            evidence=ChunkEvidence(excerptText=text_content, location=self._build_location_string(section)),
             keywords=None,
             concept=None,
             alignment=None,
