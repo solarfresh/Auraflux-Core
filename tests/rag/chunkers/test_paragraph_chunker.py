@@ -77,7 +77,7 @@ def test_multi_paragraph_chunk_count_and_capacity(chunker: ParagraphDynamicChunk
 
     # 4. Strict chunk capacity assertions
     for chunk in chunks:
-        chunk_tokens = estimate_tokens(chunk.evidence.excerpt_text)
+        chunk_tokens = estimate_tokens(chunk.evidence.excerptText)
         assert 0 < chunk_tokens <= chunker.max_chunk_size, (
             f"Chunk token size ({chunk_tokens}) violated bounds (0, {chunker.max_chunk_size}]."
         )
@@ -162,8 +162,8 @@ def test_chunk_section_normal_greedy_aggregation(mock_section):
 
     assert len(chunks) == 1
     assert isinstance(chunks[0], StandardChunk)
-    assert "Paragraph one." in chunks[0].evidence.excerpt_text
-    assert "Paragraph three." in chunks[0].evidence.excerpt_text
+    assert "Paragraph one." in chunks[0].evidence.excerptText
+    assert "Paragraph three." in chunks[0].evidence.excerptText
 
 
 def test_chunk_section_split_when_exceeding_max_size(mock_section):
@@ -201,7 +201,7 @@ def test_chunk_section_anaphora_tolerance_overflow(mock_section):
     chunks = chunker.chunk_section(mock_section)
 
     assert len(chunks) == 1
-    assert "However, this is an important point." in chunks[0].evidence.excerpt_text
+    assert "However, this is an important point." in chunks[0].evidence.excerptText
 
 
 def test_chunk_section_fallback_sub_splitter_for_oversized_paragraph(mock_section):

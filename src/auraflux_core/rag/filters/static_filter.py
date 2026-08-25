@@ -23,7 +23,7 @@ class StaticRuleFilter(BaseFilter[StandardChunk]):
         Filters out chunks that are too short, contain common layout noise,
         or have high gibberish/symbol ratios (0 Token Cost).
         """
-        text = evidence.excerpt_text.strip()
+        text = evidence.excerptText.strip()
 
         # 1. Length check (Discard if fewer than 50 characters)
         if len(text) < 50:
