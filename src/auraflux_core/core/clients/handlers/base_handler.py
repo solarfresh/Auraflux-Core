@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from auraflux_core.core.configs.logging_config import setup_logging
-from auraflux_core.core.schemas.clients import (LLMRequest, LLMResponse,
-                                                ProviderConfig)
+from auraflux_core.core.schemas.clients import (EmbeddingRequest,
+                                                EmbeddingResponse, LLMRequest,
+                                                LLMResponse, ProviderConfig)
 
 
 class BaseHandler(ABC):
@@ -28,6 +29,17 @@ class BaseHandler(ABC):
         Generates a streaming response from a language model.
         """
         pass
+
+    async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
+        """
+        Optional method to process vector embedding requests.
+
+        Concrete handlers that support embedding operations should override this method.
+        Default implementation raises NotImplementedError.
+        """
+        raise NotImplementedError(
+            f"Provider handler '{self.__class__.__name__}' does not support embedding operations."
+        )
 
     def get_available_models(self):
         pass

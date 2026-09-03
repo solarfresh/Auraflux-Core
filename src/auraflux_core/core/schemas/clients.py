@@ -6,6 +6,26 @@ from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.tools.base_tool import BaseTool
 
 
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict
+
+
+class EmbeddingRequest(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    provider: str
+    model: str
+    input: List[str]
+    parameters: Dict[str, Any] = {}
+
+
+class EmbeddingResponse(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    embeddings: List[List[float]]
+    token_usage: Optional[Dict[str, int]] = None
+
+
 class LLMRequest(BaseModel):
     """
     A standardized schema for all model inference requests.
