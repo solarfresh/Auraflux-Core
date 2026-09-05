@@ -10,10 +10,13 @@ from auraflux_core.rag.agents.keywords_extractor import ExtractKeywordsAgent
 
 Agent = Union[
     ExtractKeywordsAgent,
-    GraphSynthesistAgent,
-    KnowledgeArchitect,
+    # TODO: interfaces of BaseAgent were changed, so these agents are
+    # TODO: temporarily disabled until they are updated to match
+    # TODO: the new interface.
+    # GraphSynthesistAgent,
+    # KnowledgeArchitect,
     GenericAgent,
-    OntologyAuditor
+    # OntologyAuditor
 ]
 
 

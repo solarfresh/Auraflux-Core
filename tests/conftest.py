@@ -2,6 +2,30 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from auraflux_core.core.tools.base_tool import BaseTool
+
+
+class DummyTool(BaseTool):
+    """Reusable DummyTool for testing agent and tool executor behaviors."""
+
+    def get_name(self) -> str:
+        return "dummy_tool"
+
+    def get_description(self) -> str:
+        return "A dummy tool for unit testing."
+
+    def get_parameters(self) -> dict:
+        return {"type": "object", "properties": {}}
+
+    async def run(self, **kwargs) -> str:
+        return "dummy output"
+
+
+@pytest.fixture
+def dummy_tool():
+    """Fixture providing a fresh DummyTool instance."""
+    return DummyTool()
+
 
 @pytest.fixture
 def mock_embedding_model():
