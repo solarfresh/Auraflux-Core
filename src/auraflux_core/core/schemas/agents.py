@@ -31,7 +31,6 @@ class AgentConfig(BaseModel):
     tool_call_protocol: Literal['NATIVE', 'PROMPT', 'FORCE'] = 'NATIVE'
     tool_execution_strategy: Literal['NONE', 'DIRECT', 'REFLECTIVE'] = 'NONE'
 
-    cot_message: str | None = None
     turn_limit: int = 100
     max_tokens: NonNegativeInt = 4096
     temperature: float = 0.7

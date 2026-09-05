@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from auraflux_core.alignment.objective_claim.agents import ObjectiveClaimAgent
-from auraflux_core.alignment.objective_claim.orchestrators import \
+from auraflux_core.alignment.orchestrators import \
     AlignmentOrchestrator
 from auraflux_core.alignment.objective_claim.schemas import (
     DiagnosticAnalysis, ObjectiveClaimVerdict, TripleItem)

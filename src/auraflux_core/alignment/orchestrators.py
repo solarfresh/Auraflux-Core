@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from auraflux_core.alignment.objective_claim.strategies import \
+from auraflux_core.alignment.strategies import \
     AlignmentOrchestrationStrategy
 from auraflux_core.core.orchestrators.base import BaseOrchestrator
 from auraflux_core.core.tools.base_tool import BaseTool

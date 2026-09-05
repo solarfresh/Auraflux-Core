@@ -1,7 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.schemas.tools import ToolCallProtocol
@@ -60,6 +60,21 @@ class BaseToolExecutor(ABC):
             Message: Execution result packaged into a Message with role='tool'.
         """
         pass
+
+    def register_tools(self, tools: Union[List[BaseTool], Dict[str, BaseTool], Any]) -> None:
+        """Dynamically registers tool instances into the tool_registry."""
+        if isinstance(tools, list):
+            for tool in tools:
+                if isinstance(tool, BaseTool):
+                    self.tool_registry[tool.get_name()] = tool
+
+        elif isinstance(tools, dict):
+            for key, tool in tools.items():
+                if isinstance(tool, BaseTool):
+                    self.tool_registry[tool.get_name()] = tool
+
+                elif isinstance(key, str) and key in self.tool_registry:
+                    pass
 
 
 class ToolExecutor(BaseToolExecutor):

@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any, Dict, Generator, List
 
+from auraflux_core.core.agents.pipelines.base import (BaseAgentPipeline,
+                                                      PipelineRegistry)
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.messages import PromptFormatter
@@ -10,17 +12,15 @@ from auraflux_core.core.parsers import OutputParser
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
-from auraflux_core.core.schemas.tools import ToolCallProtocol
 from auraflux_core.core.tools import ToolExecutor
 
 
 class BaseAgent(ABC):
     """
-    Base class for all agents in the Auraflux system, using AutoGen's ConversableAgent as the foundation.
+    Base class for all agents in the Auraflux system.
 
-    This class provides a shared logging setup and a consistent initialization pattern.
-    The agent's specific behavior should be defined in subclasses by implementing their
-    role within an AutoGen GroupChat or other conversational flows.
+    Provides infrastructure capabilities (LLM clients, PromptFormatter, OutputParser, ToolExecutor)
+    and delegates execution flow control to a stateless BasePipeline strategy.
     """
     def __init__(self, config: AgentConfig, client_manager: ClientManager):
         self.config = config
@@ -31,7 +31,6 @@ class BaseAgent(ABC):
         self.prompt_formatter = PromptFormatter(
             config=self.config,
             system_message_map=self.get_system_message_map(),
-            cot_message_map=self.get_cot_message_map(),
         )
 
         self.tool_executor = ToolExecutor(
@@ -40,6 +39,9 @@ class BaseAgent(ABC):
         )
 
         self.output_parser = OutputParser()
+
+        pipeline_name = getattr(self.config, "pipeline_name", "direct")
+        self.pipeline: BaseAgentPipeline = PipelineRegistry.get(pipeline_name)
 
     @property
     def provider(self) -> str:
@@ -58,31 +60,11 @@ class BaseAgent(ABC):
         """Dynamically format the system message using PromptFormatter."""
         return self.prompt_formatter.format_system_message()
 
-    async def generate(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        copied_messages = [deepcopy(msg) for msg in messages[-self.config.turn_limit:]]
-
-        try:
-            if self.config.tool_execution_strategy == 'DIRECT':
-                tool_output_message = await self.generate_tool_message(copied_messages, tool_args_map=tool_args_map)
-                return tool_output_message
-
-            if self.config.tool_execution_strategy == 'REFLECTIVE':
-                last_message = await self.generate_tool_message(copied_messages, tool_args_map=tool_args_map)
-                self.logger.debug(f"Tool output: {last_message.content}")
-                copied_messages.append(last_message)
-
-            return await self.generate_llm_message(copied_messages)
-        except Exception as e:
-            self.logger.error(f"Error during agent generation for agent '{self.name}': {e}")
-            return Message(role='assistant', content="Error: Could not generate a response.", name=self.name)
-
-    async def generate_llm_message(self, messages: List[Message]) -> Message:
+    async def generate(self, messages: List[Message]) -> Message:
+        """Pure LLM inference execution capability."""
         copied_messages = [deepcopy(msg) for msg in messages]
-        last_message = copied_messages[-1]
 
         try:
-            last_message.content = self.prompt_formatter.append_cot_message(last_message.content)
-
             request = LLMRequest(
                 provider=self.provider,
                 model=self.model,
@@ -97,21 +79,20 @@ class BaseAgent(ABC):
             response: LLMResponse = await self.client_manager.generate(request)
             self.logger.debug(f"Received response from LLM: {response}")
 
-            output_string = self.postprocess_llm_output(response.text)
+            output_string = self.postprocess_output(response.text)
 
-            return Message(role='assistant', content=output_string, name=self.name, token_usage=response.token_usage)
+            return Message(
+                role='assistant',
+                content=output_string,
+                name=self.name,
+                token_usage=response.token_usage
+            )
         except Exception as e:
             self.logger.error(f"Error during LLM generation for agent '{self.name}': {e}")
             raise e
 
-    async def generate_tool_message(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        self.logger.info("Generating tool message...")
-        tool_call_data = await self._decide_tool_calls(messages)
-        message = await self._execute_tool_calls(tool_call_data, tool_args_map)
-        return message
-
     def generate_stream(self, message: Message, chat_history: List[Message]) -> Generator[Message, Any, Any]:
-
+        """Supports streaming response generation."""
         messages = [deepcopy(msg) for msg in chat_history]
         messages.append(message)
 
@@ -127,95 +108,29 @@ class BaseAgent(ABC):
 
     @abstractmethod
     def get_system_message_map(self) -> Dict[str, str]:
-        """
-        Abstract method to be implemented by subclasses to provide a mapping of model families
-        to their respective system messages.
-        """
+        """Abstract method to be implemented by subclasses to provide system messages."""
         pass
 
-    def get_cot_message_map(self) -> Dict[str, str] | None:
-        """
-        Method to be optionally overridden by subclasses to provide a mapping of model families
-        to their respective chain-of-thought (CoT) messages.
-        """
-        return None
-
-    def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
-        return {}
-
-    def get_tool_message_map(self) -> Dict[str, str] | None:
-        """
-        Method to be optionally overridden by subclasses to provide a mapping of model families
-        to their respective tool-use messages.
-        """
-        return None
-
-    async def _decide_tool_calls(self, messages: List[Message]) -> Dict[str, Any]:
-        tool_call_data = {}
-        tool_message = self.prompt_formatter.resolve_language_mapped_message(self.get_tool_message_map())
-
-        if self.config.tool_call_protocol == ToolCallProtocol.PROMPT.value:
-            if tool_message is None:
-                self.logger.warning(f"Tool call protocol is set to PROMPT but no tool message is defined for agent '{self.name}'. Proceeding without tool call.")
-                return {}
-
-            request = LLMRequest(
-                provider=self.provider,
-                model=self.model,
-                messages=messages,
-                system_message=tool_message,
-                thinking_level=self.config.thinking_level
+    def register_tools(self, tools: Any) -> "BaseAgent":
+        """Delegates tool registration directly to the underlying ToolExecutor."""
+        if self.tool_executor:
+            self.tool_executor.register_tools(tools)
+            self.logger.info(
+                f"Updated tools via ToolExecutor. Active tools: {list(self.tool_executor.tool_registry.keys())}"
             )
-            self.logger.debug(f"Sending request to LLM: {request}")
-            response: LLMResponse = await self.client_manager.generate(request)
-            self.logger.debug(f"Received response from LLM: {response}")
-            tool_call_data = self.postprocess_tool_output(response.text)
-        elif self.config.tool_call_protocol == ToolCallProtocol.NATIVE.value:
-            formatted_tools = self.tool_executor.convert_tool_specs(self.provider)
-            request = LLMRequest(
-                provider=self.provider,
-                model=self.model,
-                messages=messages,
-                system_message=self.system_message,
-                thinking_level=self.config.thinking_level,
-                tools=formatted_tools
-            )
-            response: LLMResponse = await self.client_manager.generate(request)
+        return self
 
-            if response.tool_calls:
-                first_call = response.tool_calls[0] if len(response.tool_calls) > 0 else {}
-
-                tool_name = first_call.get("name") or first_call.get("tool")
-                tool_args = first_call.get("arguments") or first_call.get("args", {})
-
-                tool_call_data = {
-                    "tool": tool_name,
-                    "args": tool_args
-                }
-            else:
-                raise ValueError("NATIVE protocol expected a tool call but got text response.")
-        else:
-            tool_call_data = self.get_tool_call(messages=messages)
-
-        return tool_call_data
-
-    async def _execute_tool_calls(self, tool_call_data: Dict[str, Any], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        tool_name = tool_call_data.get('tool', 'default')
-        tool_call_args = tool_call_data.get('args', {})
-
-        self.logger.debug(f"Delegating execution of tool '{tool_name}' to ToolExecutor.")
-        return await self.tool_executor.run(
-            tool_name=tool_name,
-            tool_args=tool_call_args,
-            tool_args_override_map=tool_args_map
-        )
-
-    def postprocess_tool_output(self, output_string: str) -> Any:
-        return self.output_parser.parse_json(output_string)
-
-    def postprocess_llm_output(self, output_string: str) -> str:
+    def postprocess_output(self, output_string: str) -> str:
+        """Post-processes raw LLM text based on configuration format."""
         if self.config.output_format == 'JSON':
             json_object = self.output_parser.parse_json(output_string)
             return json.dumps(json_object, ensure_ascii=False)
 
         return self.output_parser.strip_thinking_tags(output_string)
+
+    async def run(self, payload: Dict[str, Any]) -> Any:
+        """
+        Main execution entry point.
+        Delegates control flow execution directly to the bound Pipeline strategy.
+        """
+        return await self.pipeline.execute(agent=self, payload=payload)

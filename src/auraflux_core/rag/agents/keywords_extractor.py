@@ -46,7 +46,7 @@ class ExtractKeywordsAgent(BaseAgent):
             )
         }
 
-    def postprocess_llm_output(self, output_string: str) -> str:
+    def postprocess_output(self, output_string: str) -> str:
         """Processes and cleans the semantic data structure returned by the Agent."""
         json_object = self.output_parser.parse_json(output_string)
 
