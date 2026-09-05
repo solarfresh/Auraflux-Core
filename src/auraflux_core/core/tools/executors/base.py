@@ -33,16 +33,13 @@ class BaseToolExecutor(ABC):
         }
 
     @abstractmethod
-    def convert_tool_specs(self, provider: str) -> Union[List[Any], str]:
-        """
-        Convert registered tools into LLM provider-specific schemas.
+    def convert_tool_specs(self, provider: str) -> List[Any]:
+        """Convert registered tools into LLM provider-specific tool schemas/objects."""
+        pass
 
-        Args:
-            provider (str): Target LLM provider name (e.g., 'openai', 'gemini').
-
-        Returns:
-            Union[List[Any], str]: Provider-specific tool specifications or prompt text.
-        """
+    @abstractmethod
+    def get_prompt_text(self) -> str:
+        """Convert registered tools into a plain text description for PROMPT mode."""
         pass
 
     @abstractmethod
@@ -71,26 +68,28 @@ class ToolExecutor(BaseToolExecutor):
     Concrete implementation of BaseToolExecutor utilizing ToolSpecConverter.
     """
 
-    def convert_tool_specs(self, provider: str) -> Union[List[Any], str]:
-        """
-        Converts tool specifications by leveraging ToolSpecConverter based on provider and protocol.
-        """
-        if self.tool_call_protocol == ToolCallProtocol.PROMPT.value:
-            return "\n".join(
-                [ToolSpecConverter.to_prompt_text(tool) for tool in self.tool_registry.values()]
-            )
-
+    def convert_tool_specs(self, provider: str) -> List[Any]:
+        """Converts tools strictly into SDK objects or schemas."""
         provider_name = provider.lower()
         if "openai" in provider_name:
             return [
-                ToolSpecConverter.to_openai(tool) for tool in self.tool_registry.values()
+                ToolSpecConverter.to_openai(tool)
+                for tool in self.tool_registry.values()
             ]
         elif "gemini" in provider_name or "google" in provider_name:
             return [
-                ToolSpecConverter.to_gemini(tool) for tool in self.tool_registry.values()
+                ToolSpecConverter.to_gemini(tool)
+                for tool in self.tool_registry.values()
             ]
 
         return []
+
+    def get_prompt_text(self) -> str:
+        """Generates plain text prompt descriptions of all tools."""
+        return "\n".join([
+            ToolSpecConverter.to_prompt_text(tool)
+            for tool in self.tool_registry.values()
+        ])
 
     async def run(
         self,

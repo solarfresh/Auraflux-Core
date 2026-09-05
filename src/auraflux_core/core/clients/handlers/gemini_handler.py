@@ -18,7 +18,6 @@ from auraflux_core.core.schemas.clients import (
     LLMResponse,
     ProviderConfig,
 )
-from auraflux_core.core.tools.base_tool import ToolSpecConverter
 
 
 class GeminiHandler(BaseHandler):
@@ -60,20 +59,21 @@ class GeminiHandler(BaseHandler):
             response_text = response.text
             usage_metadata = response.usage_metadata
 
-            # Extract tool calls safely
-            function_call = None
+            # Extract tool calls safely into a List[Dict[str, Any]] format
+            tool_calls: Optional[List[dict]] = None
             if response.candidates and len(response.candidates) > 0:
                 candidate = response.candidates[0]
-                if candidate.content and candidate.content.parts and len(candidate.content.parts) > 0:
-                    part = candidate.content.parts[0]
-                    if hasattr(part, 'function_call') and part.function_call:
-                        function_call = part.function_call
-
-            tool_calls = (
-                {'tool': function_call.name, 'args': function_call.args}
-                if function_call is not None
-                else None
-            )
+                if candidate.content and candidate.content.parts:
+                    extracted_calls = []
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'function_call') and part.function_call:
+                            func_call = part.function_call
+                            extracted_calls.append({
+                                'name': func_call.name,
+                                'arguments': dict(func_call.args) if func_call.args else {}
+                            })
+                    if extracted_calls:
+                        tool_calls = extracted_calls
 
             total_tokens = getattr(usage_metadata, 'total_token_count', 0) if usage_metadata else 0
 
@@ -178,13 +178,7 @@ class GeminiHandler(BaseHandler):
         tools = None
         tool_config = None
         if request.tools is not None:
-            tools = [
-                types.Tool(
-                    function_declarations=[
-                        ToolSpecConverter.to_gemini(tool) for tool in request.tools
-                    ]
-                )
-            ]
+            tools = request.tools
             tool_config = types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
                     mode=types.FunctionCallingConfigMode.AUTO

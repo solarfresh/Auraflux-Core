@@ -2,15 +2,15 @@ import json
 import re
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List
 
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import setup_logging
+from auraflux_core.core.messages import PromptFormatter
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
-from auraflux_core.core.schemas.tools import (ToolCallProtocol,
-                                              ToolExecutionStrategy)
+from auraflux_core.core.schemas.tools import ToolCallProtocol
 from auraflux_core.core.tools import ToolExecutor
 
 
@@ -27,10 +27,12 @@ class BaseAgent(ABC):
         self.client_manager = client_manager
         self.logger = setup_logging(name=f"[{self.config.name}]")
         self.logger.info(f"Agent '{self.config.name}' initialized.")
-        if config.system_message is not None:
-            self.system_message = config.system_message
-        else:
-            self.system_message = str(self._message_mapper(self.get_system_message_map()))
+
+        self.prompt_formatter = PromptFormatter(
+            config=self.config,
+            system_message_map=self.get_system_message_map(),
+            cot_message_map=self.get_cot_message_map(),
+        )
 
         self.tool_executor = ToolExecutor(
             tools=self.config.tools or [],
@@ -48,6 +50,11 @@ class BaseAgent(ABC):
     @property
     def name(self) -> str:
         return self.config.name
+
+    @property
+    def system_message(self) -> str:
+        """Dynamically format the system message using PromptFormatter."""
+        return self.prompt_formatter.format_system_message()
 
     async def generate(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
         copied_messages = [deepcopy(msg) for msg in messages[-self.config.turn_limit:]]
@@ -68,17 +75,16 @@ class BaseAgent(ABC):
             return Message(role='assistant', content="Error: Could not generate a response.", name=self.name)
 
     async def generate_llm_message(self, messages: List[Message]) -> Message:
-        last_message = messages[-1]
+        copied_messages = [deepcopy(msg) for msg in messages]
+        last_message = copied_messages[-1]
 
         try:
-            cot_to_append = self.config.cot_message or self._message_mapper(self.get_cot_message_map())
-            if cot_to_append:
-                last_message.content += f"\n\n{cot_to_append}"
+            last_message.content = self.prompt_formatter.append_cot_message(last_message.content)
 
             request = LLMRequest(
                 provider=self.provider,
                 model=self.model,
-                messages=messages,
+                messages=copied_messages,
                 system_message=self.system_message,
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
@@ -144,7 +150,7 @@ class BaseAgent(ABC):
 
     async def _decide_tool_calls(self, messages: List[Message]) -> Dict[str, Any]:
         tool_call_data = {}
-        tool_message = self._message_mapper(self.get_tool_message_map())
+        tool_message = self.prompt_formatter.resolve_language_mapped_message(self.get_tool_message_map())
 
         if self.config.tool_call_protocol == ToolCallProtocol.PROMPT.value:
             if tool_message is None:
@@ -175,10 +181,27 @@ class BaseAgent(ABC):
             response: LLMResponse = await self.client_manager.generate(request)
 
             if response.tool_calls:
-                first_call = response.tool_calls[0] if isinstance(response.tool_calls, list) else response.tool_calls
+                raw_calls = response.tool_calls
+
+                if isinstance(raw_calls, list):
+                    first_call = raw_calls[0] if len(raw_calls) > 0 else {}
+                else:
+                    first_call = raw_calls
+
+                tool_name = (
+                    getattr(first_call, "name", None)
+                    or (first_call.get("name") if isinstance(first_call, dict) else None)
+                    or (first_call.get("tool") if isinstance(first_call, dict) else None)
+                )
+                tool_args = (
+                    getattr(first_call, "arguments", None)
+                    or (first_call.get("arguments") if isinstance(first_call, dict) else {})
+                    or (first_call.get("args") if isinstance(first_call, dict) else {})
+                )
+
                 tool_call_data = {
-                    "tool": getattr(first_call, "name", first_call.get("name") if isinstance(first_call, dict) else None),
-                    "args": getattr(first_call, "arguments", first_call.get("args", {}) if isinstance(first_call, dict) else {})
+                    "tool": tool_name,
+                    "args": tool_args
                 }
             else:
                 raise ValueError("NATIVE protocol expected a tool call but got text response.")
@@ -197,12 +220,6 @@ class BaseAgent(ABC):
             tool_args=tool_call_args,
             tool_args_override_map=tool_args_map
         )
-
-    def _message_mapper(self, msg_map: Dict[str, str] | None) -> str | None:
-        if msg_map is None:
-            return None
-
-        return msg_map.get(self.config.lang, 'default')
 
     def postprocess_tool_output(self, output_string: str) -> Any:
         json_object = self._parse_json_output(output_string)
