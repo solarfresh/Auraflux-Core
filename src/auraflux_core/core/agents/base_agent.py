@@ -1,5 +1,4 @@
 import json
-import re
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any, Dict, Generator, List
@@ -7,6 +6,7 @@ from typing import Any, Dict, Generator, List
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.messages import PromptFormatter
+from auraflux_core.core.parsers import OutputParser
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
@@ -38,6 +38,8 @@ class BaseAgent(ABC):
             tools=self.config.tools or [],
             tool_call_protocol=self.config.tool_call_protocol
         )
+
+        self.output_parser = OutputParser()
 
     @property
     def provider(self) -> str:
@@ -181,23 +183,10 @@ class BaseAgent(ABC):
             response: LLMResponse = await self.client_manager.generate(request)
 
             if response.tool_calls:
-                raw_calls = response.tool_calls
+                first_call = response.tool_calls[0] if len(response.tool_calls) > 0 else {}
 
-                if isinstance(raw_calls, list):
-                    first_call = raw_calls[0] if len(raw_calls) > 0 else {}
-                else:
-                    first_call = raw_calls
-
-                tool_name = (
-                    getattr(first_call, "name", None)
-                    or (first_call.get("name") if isinstance(first_call, dict) else None)
-                    or (first_call.get("tool") if isinstance(first_call, dict) else None)
-                )
-                tool_args = (
-                    getattr(first_call, "arguments", None)
-                    or (first_call.get("arguments") if isinstance(first_call, dict) else {})
-                    or (first_call.get("args") if isinstance(first_call, dict) else {})
-                )
+                tool_name = first_call.get("name") or first_call.get("tool")
+                tool_args = first_call.get("arguments") or first_call.get("args", {})
 
                 tool_call_data = {
                     "tool": tool_name,
@@ -222,29 +211,11 @@ class BaseAgent(ABC):
         )
 
     def postprocess_tool_output(self, output_string: str) -> Any:
-        json_object = self._parse_json_output(output_string)
-        return json_object
+        return self.output_parser.parse_json(output_string)
 
     def postprocess_llm_output(self, output_string: str) -> str:
         if self.config.output_format == 'JSON':
-            json_object = self._parse_json_output(output_string)
+            json_object = self.output_parser.parse_json(output_string)
             return json.dumps(json_object, ensure_ascii=False)
 
-        return output_string
-
-    def _parse_json_output(self, output_string: str) -> Dict:
-        json_pattern = r"```json\s*(\{.*\})\s*```"
-        match = re.search(json_pattern, output_string, re.DOTALL)
-        if match:
-            json_string = match.group(1)
-        else:
-            try:
-                return json.loads(output_string)
-            except Exception as e:
-                self.logger.warning(output_string)
-                raise e
-
-        clean_string = re.sub(r'\\\w+\{([^}]+)\}', r'->(\1)->', json_string)
-        clean_string = clean_string.replace('$', '')
-
-        return json.loads(clean_string)
+        return self.output_parser.strip_thinking_tags(output_string)
