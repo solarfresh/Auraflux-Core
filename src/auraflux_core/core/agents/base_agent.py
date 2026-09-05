@@ -11,7 +11,7 @@ from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.schemas.tools import (ToolCallProtocol,
                                               ToolExecutionStrategy)
-from auraflux_core.core.tools.base_tool import BaseTool
+from auraflux_core.core.tools import ToolExecutor
 
 
 class BaseAgent(ABC):
@@ -32,7 +32,10 @@ class BaseAgent(ABC):
         else:
             self.system_message = str(self._message_mapper(self.get_system_message_map()))
 
-        self._tool_cache: Optional[Dict[str, Any]] = None
+        self.tool_executor = ToolExecutor(
+            tools=self.config.tools or [],
+            tool_call_protocol=self.config.tool_call_protocol
+        )
 
     @property
     def provider(self) -> str:
@@ -55,7 +58,7 @@ class BaseAgent(ABC):
                 return tool_output_message
 
             if self.config.tool_execution_strategy == 'REFLECTIVE':
-                last_message = await self.generate_tool_message(copied_messages)
+                last_message = await self.generate_tool_message(copied_messages, tool_args_map=tool_args_map)
                 self.logger.debug(f"Tool output: {last_message.content}")
                 copied_messages.append(last_message)
 
@@ -96,8 +99,8 @@ class BaseAgent(ABC):
     async def generate_tool_message(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
         self.logger.info("Generating tool message...")
         tool_call_data = await self._decide_tool_calls(messages)
-        messsage = await self._execute_tool_calls(tool_call_data, tool_args_map)
-        return messsage
+        message = await self._execute_tool_calls(tool_call_data, tool_args_map)
+        return message
 
     def generate_stream(self, message: Message, chat_history: List[Message]) -> Generator[Message, Any, Any]:
 
@@ -122,15 +125,6 @@ class BaseAgent(ABC):
         """
         pass
 
-    def get_tool_map(self) -> Dict[str, BaseTool]:
-        if not self._tool_cache:
-            if len(self.config.tools):
-                self._tool_cache = {tool.get_name(): tool for tool in self.config.tools}
-            else:
-                raise ValueError(f"No tools configured for {self.name}. Please check the agent configuration.")
-
-        return self._tool_cache
-
     def get_cot_message_map(self) -> Dict[str, str] | None:
         """
         Method to be optionally overridden by subclasses to provide a mapping of model families
@@ -151,7 +145,7 @@ class BaseAgent(ABC):
     async def _decide_tool_calls(self, messages: List[Message]) -> Dict[str, Any]:
         tool_call_data = {}
         tool_message = self._message_mapper(self.get_tool_message_map())
-        tool_map = self.get_tool_map()
+
         if self.config.tool_call_protocol == ToolCallProtocol.PROMPT.value:
             if tool_message is None:
                 self.logger.warning(f"Tool call protocol is set to PROMPT but no tool message is defined for agent '{self.name}'. Proceeding without tool call.")
@@ -169,53 +163,40 @@ class BaseAgent(ABC):
             self.logger.debug(f"Received response from LLM: {response}")
             tool_call_data = self.postprocess_tool_output(response.text)
         elif self.config.tool_call_protocol == ToolCallProtocol.NATIVE.value:
+            formatted_tools = self.tool_executor.convert_tool_specs(self.provider)
             request = LLMRequest(
                 provider=self.provider,
                 model=self.model,
                 messages=messages,
                 system_message=self.system_message,
                 thinking_level=self.config.thinking_level,
-                tools=[t for t in tool_map.values()]
+                tools=formatted_tools
             )
             response: LLMResponse = await self.client_manager.generate(request)
 
             if response.tool_calls:
-                tool_call_data = response.tool_calls
+                first_call = response.tool_calls[0] if isinstance(response.tool_calls, list) else response.tool_calls
+                tool_call_data = {
+                    "tool": getattr(first_call, "name", first_call.get("name") if isinstance(first_call, dict) else None),
+                    "args": getattr(first_call, "arguments", first_call.get("args", {}) if isinstance(first_call, dict) else {})
+                }
             else:
                 raise ValueError("NATIVE protocol expected a tool call but got text response.")
         else:
-            tool_call_data  = self.get_tool_call(messages=messages)
+            tool_call_data = self.get_tool_call(messages=messages)
 
         return tool_call_data
 
     async def _execute_tool_calls(self, tool_call_data: Dict[str, Any], tool_args_map: Dict[str, Any] | None = None) -> Message:
         tool_name = tool_call_data.get('tool', 'default')
         tool_call_args = tool_call_data.get('args', {})
-        if tool_args_map is not None:
-            tool_call_args.update(**tool_args_map.get(tool_name, {}))
 
-        tool = self.get_tool_map()[tool_name]
-        self.logger.debug("Retrieved tool for tool call.")
-
-        if tool is None:
-            self.logger.warning(f"No tool found for tool call: '{tool_name}'")
-            return Message(role='assistant', content=f"Error: Tool '{tool_name}' not available.", name=self.name)
-
-        try:
-            self.logger.debug(f"Executing tool '{tool_name}' with args: {tool_call_args}")
-            tool_output = await tool.run(**tool_call_args)
-
-            if isinstance(tool_output, str):
-                pass
-            elif isinstance(tool_output, dict):
-                tool_output = json.dumps(tool_output, ensure_ascii=False)
-            else:
-                raise ValueError(f"Unsupported tool output type: {type(tool_output)}. Expected str or dict.")
-
-            return Message(role='assistant', content=tool_output, name=self.name)
-        except Exception as e:
-            self.logger.error(f"Error executing tool '{tool_name}': {e}")
-            raise e
+        self.logger.debug(f"Delegating execution of tool '{tool_name}' to ToolExecutor.")
+        return await self.tool_executor.run(
+            tool_name=tool_name,
+            tool_args=tool_call_args,
+            tool_args_override_map=tool_args_map
+        )
 
     def _message_mapper(self, msg_map: Dict[str, str] | None) -> str | None:
         if msg_map is None:

@@ -109,7 +109,6 @@ class GeminiHandler(BaseHandler):
                 else None,
             )
 
-            # 修正處：直接從 res.embeddings 取得向量列表
             embeddings_list: List[List[float]] = []
             if hasattr(res, 'embeddings') and res.embeddings:
                 embeddings_list = [e.values for e in res.embeddings if e.values is not None]
