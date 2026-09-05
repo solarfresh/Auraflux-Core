@@ -31,24 +31,6 @@ class ObjectiveClaimAgent(BaseAgent, PlanAndExecuteHandler):
             ),
         }
 
-    def get_cot_message_map(self) -> Optional[Dict[str, str]]:
-        return {
-            "zh": (
-                "請逐步執行正交診斷與交叉驗證：\n"
-                "1. 提取語意三元組 (Subject -> Predicate -> Object)。\n"
-                "2. 剖析隱性前提 (implicit_premises) 與量化需求 (quantification_requirements)。\n"
-                "3. 嚴格比對 Context 證據，判定 status (VERIFIED / UNSUPPORTED)。\n"
-                "請嚴格輸出符合規範的 JSON 物件。"
-            ),
-            "default": (
-                "Perform orthogonal diagnosis and verification step-by-step:\n"
-                "1. Extract semantic triples.\n"
-                "2. Parse implicit premises and criteria.\n"
-                "3. Cross-check against context evidence for final status.\n"
-                "Ensure strict JSON output."
-            ),
-        }
-
     # =========================================================================
     # PlanAndExecuteHandler Implementation (Domain Hooks for Pipeline)
     # =========================================================================
@@ -63,9 +45,27 @@ class ObjectiveClaimAgent(BaseAgent, PlanAndExecuteHandler):
             f"Claim: {claim_text}\n\n"
             "Task:\n"
             "1. Extract semantic triples (Subject -> Predicate -> Object).\n"
-            "2. Perform orthogonal diagnosis (implicit_premises, quantification_requirements).\n"
+            "2. Perform orthogonal diagnosis (implicit_premises, quantification_requirements, boundary_conflicts).\n"
             "3. Generate an optimal search query (`query_text`) to retrieve core context evidence.\n\n"
-            "Output strict JSON format with keys: `triples`, `diagnostics`, `query_text`."
+            "CRITICAL FORMAT RULES:\n"
+            "- `quantification_requirements` MUST BE A DICTIONARY OBJECT (NOT A LIST/ARRAY).\n\n"
+            "Required Output JSON Format:\n"
+            "{\n"
+            '  "triples": [\n'
+            '    {"subject": "...", "predicate": "...", "object": "..."}\n'
+            '  ],\n'
+            '  "diagnostics": {\n'
+            '    "implicit_premises": ["..."],\n'
+            '    "quantification_requirements": {\n'
+            '      "required_artifact_types": ["..."],\n'
+            '      "acceptance_criteria": "..."\n'
+            '    },\n'
+            '    "boundary_conflicts": {\n'
+            '      "has_conflict": false\n'
+            '    }\n'
+            '  },\n'
+            '  "query_text": "..."\n'
+            "}"
         )
         return [Message(role="user", content=prompt, name=self.name)]
 

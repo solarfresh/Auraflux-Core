@@ -1,6 +1,6 @@
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, Optional
 
 from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.orchestrators.state import (ExecutionStep,
@@ -70,3 +70,21 @@ class OrchestrationStrategy(ABC):
             self.logger.error(f"Dispatch failure for {actor_name}: {str(e)}")
             state.add_step(ExecutionStep(actor_name=actor_name, input_params=kwargs, error=str(e)))
             raise e
+
+    def register_tools_to_agents(
+        self, tools: Dict[str, Any],
+        agents: Dict[str, Any],
+        target_agent_keys: Optional[Iterable[str]] = None
+    ) -> None:
+        """
+        Broadcasts and registers tools across target agents.
+        If target_agent_keys is None, attempts to register across all agents in the dictionary.
+        """
+        if not tools or not agents:
+            return
+
+        keys_to_process = target_agent_keys if target_agent_keys is not None else agents.keys()
+        for agent_key in keys_to_process:
+            agent = agents.get(agent_key)
+            if agent and hasattr(agent, "register_tools"):
+                agent.register_tools(tools)

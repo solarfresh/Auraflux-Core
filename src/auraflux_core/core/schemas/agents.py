@@ -23,6 +23,7 @@ class AgentConfig(BaseModel):
     lang: str = 'en'
     system_message: str | None = None
     output_format: Literal['TEXT', 'JSON'] = 'TEXT'
+    pipeline_name: Literal['direct', 'plan_and_execute'] = 'direct'
 
     thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
 
