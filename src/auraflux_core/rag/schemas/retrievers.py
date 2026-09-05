@@ -44,6 +44,23 @@ class OpenSearchHybridConfig(HybridSearchConfig):
     )
 
 
+class HybridRetrieverInput(BaseModel):
+    """Input parameters model for the generic agent HybridRetrieverTool."""
+    query_text: str = Field(
+        ...,
+        description="The query statement or keywords used for semantic and text search."
+    )
+    top_k: int = Field(
+        default=5,
+        gt=0,
+        description="Maximum number of context chunks to retrieve."
+    )
+    filters: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Generic metadata filtering key-value criteria (e.g., {'project_id': 'proj_123'})."
+    )
+
+
 class RetrievalResult(BaseModel):
     """
     Vendor-agnostic data model representing a unified retrieval hit
