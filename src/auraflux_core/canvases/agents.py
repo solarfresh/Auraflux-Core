@@ -1,11 +1,9 @@
 import json
-import re
 from copy import deepcopy
 from typing import Any, Dict, List
 
 from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.schemas.messages import Message
-from auraflux_core.core.tools.base_tool import BaseTool
 
 
 class KnowledgeArchitect(BaseAgent):
@@ -148,10 +146,6 @@ class KnowledgeArchitect(BaseAgent):
             )
         }
 
-    def postprocess_llm_output(self, output_string: str) -> Any:
-        json_object = self._parse_json_output(output_string)
-        return json.dumps(json_object, ensure_ascii=False)
-
 
 class OntologyAuditor(BaseAgent):
     def get_system_message_map(self) -> Dict[str, str]:
@@ -275,10 +269,6 @@ class OntologyAuditor(BaseAgent):
         # 5. Final LLM generation
         return response
 
-    def postprocess_llm_output(self, output_string: str) -> Any:
-        json_object = self._parse_json_output(output_string)
-        return json.dumps(json_object, ensure_ascii=False)
-
     def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
         """
         Forces the agent to call the GraphIsolationRateTool.
@@ -286,10 +276,6 @@ class OntologyAuditor(BaseAgent):
         """
         # The tool name should match the key in your get_tool_map()
         tool_name = "graph_isolation_rate_analyzer"
-        if self._tool_cache is None or tool_name not in self._tool_cache:
-            self.logger.error(f"Tool '{tool_name}' not found in tool map for agent '{self.name}'. Ensure it is defined in get_tool_map().")
-            raise ValueError(f"Tool '{tool_name}' not available.")
-
         graph_json = json.loads(messages[-2].content)
         return {
             "tool": tool_name,
@@ -371,17 +357,3 @@ class GraphSynthesistAgent(BaseAgent):
             )
         }
 
-    def get_tool_map(self) -> Dict[str, BaseTool]:
-        """
-        Lazily loads and caches the Graphing tools.
-        """
-        if self._tool_cache is None:
-            # Local import to prevent circular dependencies and heavy startup
-            from .tools import SpatialLocateTool
-
-            self._tool_cache = {}
-            for name, config in self.config.tool_configs.items():
-                if name == 'spatial_locate':
-                    self._tool_cache['spatial_locate'] = SpatialLocateTool(config)
-
-        return super().get_tool_map()

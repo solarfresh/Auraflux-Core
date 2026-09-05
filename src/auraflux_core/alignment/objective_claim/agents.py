@@ -3,7 +3,7 @@ from copy import deepcopy
 
 from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.schemas.messages import Message
-from auraflux_core.alignment.schemas.objective_claim import (
+from auraflux_core.alignment.objective_claim.schemas import (
     ObjectiveClaimVerdict,
     TripleItem,
     DiagnosticAnalysis,
@@ -18,7 +18,7 @@ class ObjectiveClaimAgent(BaseAgent):
 
     def get_system_message_map(self) -> Dict[str, str]:
         return {
-            "zh-TW": (
+            "zh": (
                 "你是一名客觀聲明稽核專家，負責針對單一原子命題進行正交診斷分析"
                 "（隱性前提、標準與量化需求、邊界衝突），並根據檢索到的佐證資料進行最終驗證判決。"
             ),
@@ -30,7 +30,7 @@ class ObjectiveClaimAgent(BaseAgent):
 
     def get_cot_message_map(self) -> Optional[Dict[str, str]]:
         return {
-            "zh-TW": (
+            "zh": (
                 "請逐步執行正交診斷：\n"
                 "1. 提取命題中的語意三元組 (Subject -> Predicate -> Object)。\n"
                 "2. 剖析隱性前提 (implicit_premises)。\n"
