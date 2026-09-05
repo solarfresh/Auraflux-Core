@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from opensearchpy import OpenSearch
 
+from auraflux_core.rag.retrievers.base import BaseRetriever
 from auraflux_core.rag.schemas.retrievers import (OpenSearchHybridConfig,
                                                   RetrievalResult)
 
@@ -83,7 +84,7 @@ class OpenSearchService:
         return response.get("hits", {}).get("hits", [])
 
 
-class OpenSearchHybridRetriever:
+class OpenSearchHybridRetriever(BaseRetriever):
     """Configurable OpenSearch retriever accepting customizable text and vector fields."""
 
     def __init__(
