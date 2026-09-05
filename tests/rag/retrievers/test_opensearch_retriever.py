@@ -49,13 +49,13 @@ class TestOpenSearchDSLBuilder:
 @pytest.mark.asyncio
 class TestOpenSearchHybridRetriever:
     async def test_retrieve_success(
-        self, mock_opensearch_client, mock_embedding_client, sample_opensearch_response
+        self, mock_opensearch_client, mock_embedding_model, sample_opensearch_response
     ):
         mock_opensearch_client.search.return_value = sample_opensearch_response
 
         retriever = OpenSearchHybridRetriever(
             client=mock_opensearch_client,
-            embedding_client=mock_embedding_client,
+            embedding_model=mock_embedding_model,
             default_index_name="test_index",
         )
 
@@ -65,8 +65,8 @@ class TestOpenSearchHybridRetriever:
             filters={"project_id": "proj_abc"},
         )
 
-        # 1. Verify embedding invocation
-        mock_embedding_client.embed_query.assert_awaited_once_with("safety standards")
+        # 1. Verify embedding model invocation via BaseEmbedding interface
+        mock_embedding_model.embed_query.assert_awaited_once_with("safety standards")
 
         # 2. Verify OpenSearch client call
         assert mock_opensearch_client.search.called
@@ -86,13 +86,13 @@ class TestOpenSearchHybridRetriever:
         assert results[1].text == "Secondary evidence content."
 
     async def test_retrieve_empty_results(
-        self, mock_opensearch_client, mock_embedding_client
+        self, mock_opensearch_client, mock_embedding_model
     ):
         mock_opensearch_client.search.return_value = {"hits": {"hits": []}}
 
         retriever = OpenSearchHybridRetriever(
             client=mock_opensearch_client,
-            embedding_client=mock_embedding_client,
+            embedding_model=mock_embedding_model,
             default_index_name="empty_index",
         )
 

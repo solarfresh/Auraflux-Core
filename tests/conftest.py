@@ -4,18 +4,16 @@ import pytest
 
 
 @pytest.fixture
-def mock_embedding_client():
-    """Mock for the generic asynchronous embedding client."""
-    client = MagicMock()
-    client.embed_query = AsyncMock(return_value=[0.1, 0.2, 0.3])
-    return client
-
+def mock_embedding_model():
+    """Mock for the BaseEmbedding model instance."""
+    model = MagicMock()
+    model.embed_query = AsyncMock(return_value=[0.1, 0.2, 0.3])
+    return model
 
 @pytest.fixture
 def mock_opensearch_client():
     """Mock for the low-level OpenSearch SDK client."""
     return MagicMock()
-
 
 @pytest.fixture
 def sample_opensearch_response():

@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from opensearchpy import OpenSearch
 
+from auraflux_core.core.embeddings.base_embedding import BaseEmbedding
 from auraflux_core.rag.retrievers.base import BaseRetriever
 from auraflux_core.rag.schemas.retrievers import (OpenSearchHybridConfig,
                                                   RetrievalResult)
@@ -90,14 +91,14 @@ class OpenSearchHybridRetriever(BaseRetriever):
     def __init__(
         self,
         client: OpenSearch,
-        embedding_client: Any,
+        embedding_model: BaseEmbedding,
         default_index_name: str,
         text_fields: Optional[List[str]] = None,
         vector_fields: Optional[List[str]] = None,
         default_search_pipeline: Optional[str] = "rrf_question_oriented"
     ):
         self.service = OpenSearchService(client)
-        self.embedding_client = embedding_client
+        self.embedding_model = embedding_model
         self.default_index_name = default_index_name
         self.text_fields = text_fields or ["target_question", "concept_title^1.5", "evidence_text"]
         self.vector_fields = vector_fields or ["question_vector", "concept_vector", "evidence_vector"]
@@ -111,7 +112,7 @@ class OpenSearchHybridRetriever(BaseRetriever):
         index_name: Optional[str] = None,
         routing: Optional[str] = None
     ) -> List[RetrievalResult]:
-        query_vector = await self.embedding_client.embed_query(query_text)
+        query_vector = await self.embedding_model.embed_query(query_text)
 
         config = OpenSearchHybridConfig(
             query_text=query_text,
