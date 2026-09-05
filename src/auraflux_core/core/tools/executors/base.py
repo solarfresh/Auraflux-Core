@@ -1,12 +1,11 @@
 import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Union
-
-from base_tool import BaseTool, ToolSpecConverter
+from typing import Any, Dict, List, Optional
 
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.schemas.tools import ToolCallProtocol
+from auraflux_core.core.tools.base_tool import BaseTool, ToolSpecConverter
 
 
 class BaseToolExecutor(ABC):

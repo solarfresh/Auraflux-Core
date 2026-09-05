@@ -34,3 +34,8 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/solarfresh/Auraflux-Core"
 Issues = "https://github.com/solarfresh/Auraflux-Core/issues"
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term --cov-report=html"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+pythonpath = ["src"]

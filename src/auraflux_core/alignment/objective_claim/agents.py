@@ -1,5 +1,4 @@
-from typing import Any, Dict, List, Optional
-from copy import deepcopy
+from typing import Any, Dict, Optional
 
 from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.schemas.messages import Message
@@ -67,7 +66,7 @@ class ObjectiveClaimAgent(BaseAgent):
         """
         # Step 1: Construct prompt for Pass 1 (Orthogonal Diagnosis)
         prompt_content = f"Proposition ID: {proposition_id}\nClaim: {claim_text}"
-        messages = [Message(name="user", content=prompt_content, role='ObjectiveClaimAgent')]
+        messages = [Message(role="user", content=prompt_content, name='ObjectiveClaimAgent')]
 
         # Step 2: Execute LLM generation using BaseAgent infrastructure
         # Uses REFLECTIVE strategy if configured to retrieve context tools, or direct generation
