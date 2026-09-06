@@ -98,7 +98,7 @@ class OpenSearchHybridRetriever(BaseRetriever):
         default_index_name: str,
         text_fields: Optional[List[str]] = None,
         vector_fields: Optional[List[str]] = None,
-        default_search_pipeline: Optional[str] = "rrf_pipeline",
+        default_search_pipeline: Optional[str] = "rrf_question_oriented",
         formatter_fn: Optional[Callable[[Dict[str, Any]], str]] = None
     ):
         """
@@ -160,12 +160,12 @@ class OpenSearchHybridRetriever(BaseRetriever):
             source = hit.get("_source", {})
 
             # Format raw document via customizable formatter without hardcoding business fields
-            extracted_text = self.formatter_fn(source)
+            formatted_content = self.formatter_fn(source)
 
             results.append(
                 RetrievalResult(
                     id=str(hit.get("_id", "")),
-                    text=extracted_text,
+                    content=formatted_content,
                     score=hit.get("_score"),
                     metadata=source  # Unaltered raw _source preserved for downstream extraction
                 )
@@ -174,7 +174,7 @@ class OpenSearchHybridRetriever(BaseRetriever):
         return results
 
     @staticmethod
-    def _default_doc_formatter(source: Dict[str, Any]) -> str:
+    def _default_doc_formatter(source: Dict[str, Any]) -> Dict[str, Any]:
         """Generic fallback doc sanitizer:
 
         Serializes `_source` to JSON while stripping large vector/embedding arrays
@@ -192,8 +192,4 @@ class OpenSearchHybridRetriever(BaseRetriever):
         if "vectors" in clean_source and isinstance(clean_source["vectors"], dict):
             del clean_source["vectors"]
 
-        # Return plain string if single text field exists; otherwise return formatted JSON
-        if "text" in clean_source and len(clean_source) == 1:
-            return str(clean_source["text"])
-
-        return json.dumps(clean_source, ensure_ascii=False, indent=2)
+        return clean_source

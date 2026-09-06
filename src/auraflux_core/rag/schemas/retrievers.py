@@ -70,9 +70,9 @@ class RetrievalResult(BaseModel):
         ...,
         description="Universal identifier for the retrieved chunk or document entity."
     )
-    text: str = Field(
+    content: Any = Field(
         ...,
-        description="The primary textual content extracted for downstream LLM context/evidence evaluation."
+        description="The formatted document content payload (e.g., structured dict, domain object, or sanitized string) produced by the retriever's formatter function."
     )
     score: Optional[float] = Field(
         default=None,

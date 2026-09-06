@@ -37,7 +37,7 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
     def build_plan_messages(self, payload):
         return [Message(role="user", content="Plan stage prompt", name=self.name)]
 
-    def extract_tool_call_spec(self, plan_output):
+    def extract_tool_call_spec(self, payload, plan_output):
         if plan_output.get("needs_tool"):
             return {
                 "tool_name": "search_tool",

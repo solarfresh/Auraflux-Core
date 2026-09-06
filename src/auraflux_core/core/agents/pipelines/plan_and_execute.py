@@ -20,7 +20,7 @@ class PlanAndExecuteHandler(ABC):
         pass
 
     @abstractmethod
-    def extract_tool_call_spec(self, plan_output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def extract_tool_call_spec(self, payload: Dict[str, Any], plan_output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         pass
 
     @abstractmethod
@@ -50,7 +50,7 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         plan_output = agent.output_parser.parse_json(plan_response.content)
 
         # Stage 2: Tool
-        tool_spec = agent.extract_tool_call_spec(plan_output)
+        tool_spec = agent.extract_tool_call_spec(payload, plan_output)
         tool_results = []
         if tool_spec and agent.tool_executor:
             tool_name = tool_spec.get("tool_name")

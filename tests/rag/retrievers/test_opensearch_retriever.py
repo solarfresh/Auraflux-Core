@@ -78,12 +78,12 @@ class TestOpenSearchHybridRetriever:
         assert len(results) == 2
         assert isinstance(results[0], RetrievalResult)
         assert results[0].id == "doc_1"
-        assert results[0].text == "This is a test context chunk."
+        assert results[0].content['text'] == "This is a test context chunk."
         assert results[0].score == 0.95
         assert results[0].metadata["category"] == "ai_safety"
 
         assert results[1].id == "doc_2"
-        assert results[1].text == "Secondary evidence content."
+        assert results[1].content['evidence_text'] == "Secondary evidence content."
 
     async def test_retrieve_empty_results(
         self, mock_opensearch_client, mock_embedding_model
