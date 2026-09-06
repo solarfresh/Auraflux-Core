@@ -29,7 +29,8 @@ dependencies = [
     "opensearch-py==3.2.0",
     "pydantic==2.12.5",
     "pydantic-settings==2.13.1",
-    "pygraphviz==1.14"
+    "pygraphviz==1.14",
+    "tenacity==9.1.4"
 ]
 
 [project.urls]

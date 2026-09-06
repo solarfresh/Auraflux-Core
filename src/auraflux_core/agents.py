@@ -31,21 +31,21 @@ AGENT_REGISTRY: Dict[str, AgentImplementation] = {
         agent_class=ExtractKeywordsAgent,
         config_class=AgentConfig
     ),
-    'GraphSynthesistAgent': AgentImplementation(
-        agent_class=GraphSynthesistAgent,
-        config_class=GraphSynthesistAgentConfig,
-        tool_config_mapping={
-            'spatial_locate': SpatialLocateToolConfig
-        }
-    ),
-    'KnowledgeArchitect': AgentImplementation(
-        agent_class=KnowledgeArchitect,
-        config_class=AgentConfig,
-    ),
-    'OntologyAuditor': AgentImplementation(
-        agent_class=OntologyAuditor,
-        config_class=AgentConfig,
-    ),
+    # 'GraphSynthesistAgent': AgentImplementation(
+    #     agent_class=GraphSynthesistAgent,
+    #     config_class=GraphSynthesistAgentConfig,
+    #     tool_config_mapping={
+    #         'spatial_locate': SpatialLocateToolConfig
+    #     }
+    # ),
+    # 'KnowledgeArchitect': AgentImplementation(
+    #     agent_class=KnowledgeArchitect,
+    #     config_class=AgentConfig,
+    # ),
+    # 'OntologyAuditor': AgentImplementation(
+    #     agent_class=OntologyAuditor,
+    #     config_class=AgentConfig,
+    # ),
     # Default fallback or other agents
     'default': AgentImplementation(
         agent_class=GenericAgent,

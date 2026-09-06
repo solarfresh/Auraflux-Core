@@ -2,22 +2,15 @@ from typing import Any, Generator, List, Optional
 
 from google import genai
 from google.genai import errors, types
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import (retry, retry_if_exception_type,
+                      retry_if_not_exception_type, stop_after_attempt,
+                      wait_exponential)
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.configs.logging_config import setup_logging
-from auraflux_core.core.schemas.clients import (
-    EmbeddingRequest,
-    EmbeddingResponse,
-    LLMRequest,
-    LLMResponse,
-    ProviderConfig,
-)
+from auraflux_core.core.schemas.clients import (EmbeddingRequest,
+                                                EmbeddingResponse, LLMRequest,
+                                                LLMResponse, ProviderConfig)
 
 
 class GeminiHandler(BaseHandler):
@@ -90,9 +83,9 @@ class GeminiHandler(BaseHandler):
             raise RuntimeError(f"An error occurred while calling the Gemini API: {e}")
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1.2, min=30, max=300),
-        retry=retry_if_exception_type(errors.ServerError),
+        retry=retry_if_not_exception_type(ValueError),
         reraise=True,
     )
     async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
