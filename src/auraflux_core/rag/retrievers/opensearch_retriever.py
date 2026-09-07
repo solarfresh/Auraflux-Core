@@ -1,63 +1,83 @@
 import asyncio
-import json
 from typing import Any, Callable, Dict, List, Optional
 
 from opensearchpy import OpenSearch
 
 from auraflux_core.rag.retrievers.base import BaseRetriever
-from auraflux_core.rag.schemas.retrievers import (OpenSearchHybridConfig,
+from auraflux_core.rag.schemas.retrievers import (HybridQueryItem,
+                                                  OpenSearchHybridConfig,
                                                   RetrievalResult)
 
 
 class OpenSearchDSLBuilder:
     """Internal helper class translating OpenSearchHybridConfig into standard OpenSearch DSL."""
+    MAX_HYBRID_QUERIES = 5
 
-    @staticmethod
-    def _build_filter_clause(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-        filter_clauses = []
+    @classmethod
+    def _build_filter_clause(cls, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        filter_clauses: List[Dict[str, Any]] = []
+
         for key, value in filters.items():
+            if not value:
+                continue
+
             if isinstance(value, list):
                 filter_clauses.append({"terms": {key: value}})
+
+            elif isinstance(value, dict):
+                filter_clauses.append({"range": {key: value}})
+
             else:
                 filter_clauses.append({"term": {key: value}})
+
         return filter_clauses
 
     @classmethod
     def build_hybrid_query(cls, config: OpenSearchHybridConfig) -> Dict[str, Any]:
+        filter_clauses = cls._build_filter_clause(config.filters) if config.filters else []
         hybrid_queries: List[Dict[str, Any]] = []
 
-        if config.text_fields:
-            hybrid_queries.append({
-                "multi_match": {
-                    "query": config.query_text,
-                    "fields": config.text_fields
-                }
-            })
+        for item in config.query_items:
 
-        for vec_field in config.vector_fields:
-            hybrid_queries.append({
-                "knn": {
-                    vec_field: {
-                        "vector": config.query_vector,
-                        "k": config.top_k * 3
+            if item.query_text and item.text_field:
+                hybrid_queries.append({
+                    "multi_match": {
+                        "query": item.query_text,
+                        "fields": [item.text_field]
                     }
-                }
-            })
+                })
 
-        query_body: Dict[str, Any] = {"size": config.top_k}
+            if item.query_vector and item.vector_field:
+                hybrid_queries.append({
+                    "knn": {
+                        item.vector_field: {
+                            "vector": item.query_vector,
+                            "k": config.top_k * 3
+                        }
+                    }
+                })
 
-        if config.filters:
-            filter_clauses = cls._build_filter_clause(config.filters)
-            query_body["query"] = {
-                "bool": {
-                    "must": [{"hybrid": {"queries": hybrid_queries}}],
-                    "filter": filter_clauses
-                }
+        total_sub_queries = len(hybrid_queries)
+        if total_sub_queries > cls.MAX_HYBRID_QUERIES:
+            raise ValueError(
+                f"Generated {total_sub_queries} sub-queries, which exceeds the OpenSearch hybrid "
+                f"limit of {cls.MAX_HYBRID_QUERIES}. Reduce the number of query_items or field mappings."
+            )
+
+        hybrid_body: Dict[str, Any] = {"queries": hybrid_queries}
+
+        if filter_clauses:
+            if len(filter_clauses) == 1:
+                hybrid_body["filter"] = filter_clauses[0]
+            else:
+                hybrid_body["filter"] = {"bool": {"filter": filter_clauses}}
+
+        return {
+            "size": config.top_k,
+            "query": {
+                "hybrid": hybrid_body
             }
-        else:
-            query_body["query"] = {"hybrid": {"queries": hybrid_queries}}
-
-        return query_body
+        }
 
 
 class OpenSearchService:
@@ -96,8 +116,6 @@ class OpenSearchHybridRetriever(BaseRetriever):
         client: Any,
         embedding_model: Any,
         default_index_name: str,
-        text_fields: Optional[List[str]] = None,
-        vector_fields: Optional[List[str]] = None,
         default_search_pipeline: Optional[str] = "rrf_question_oriented",
         formatter_fn: Optional[Callable[[Dict[str, Any]], str]] = None
     ):
@@ -106,8 +124,6 @@ class OpenSearchHybridRetriever(BaseRetriever):
             client: OpenSearch client instance.
             embedding_model: Text embedding model instance.
             default_index_name: Target OpenSearch index name.
-            text_fields: Fields for BM25 full-text search (e.g., ["title^2.0", "content"]).
-            vector_fields: Fields for k-NN vector search (e.g., ["title_vector", "content_vector"]).
             default_search_pipeline: OpenSearch Hybrid Search Pipeline name.
             formatter_fn: Optional custom callable to transform `_source` dict into the target text string.
                           Defaults to a generic JSON sanitizer (stripping huge vector arrays).
@@ -119,8 +135,6 @@ class OpenSearchHybridRetriever(BaseRetriever):
         self.default_index_name = default_index_name
 
         # Generic defaults without hardcoded business schema paths
-        self.text_fields = text_fields or ["title^2.0", "content", "text"]
-        self.vector_fields = vector_fields or ["vector", "embedding"]
         self.default_search_pipeline = default_search_pipeline
 
         # Pluggable doc formatter function (defaults to generic JSON sanitizer)
@@ -128,32 +142,39 @@ class OpenSearchHybridRetriever(BaseRetriever):
 
     async def retrieve(
         self,
-        query_text: str,
+        query_items: List[HybridQueryItem],
         top_k: int = 5,
-        text_fields: Optional[List[str]] = None,
-        vector_fields: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
         index_name: Optional[str] = None,
         routing: Optional[str] = None
     ) -> List[RetrievalResult]:
-        """Executes hybrid vector + BM25 search and returns standardized RetrievalResults."""
+        """Executes multi-query hybrid vector + BM25 search and returns standardized RetrievalResults."""
 
-        # Generate query vector asynchronously
-        query_vector = await self.embedding_model.embed_query(query_text)
+        if not query_items:
+            return []
+
+        embeddings = await asyncio.gather(
+            *(
+                self.embedding_model.embed_query(item.query_text)
+                for item in query_items
+            )
+        )
+
+        for item, vector in zip(query_items, embeddings):
+            item.query_vector = vector
 
         config = OpenSearchHybridConfig(
-            query_text=query_text,
-            query_vector=query_vector,
+            query_items=query_items,
             top_k=top_k,
             filters=filters,
-            text_fields=text_fields or self.text_fields,
-            vector_fields=vector_fields or self.vector_fields,
             search_pipeline=self.default_search_pipeline
         )
         dsl_body = OpenSearchDSLBuilder.build_hybrid_query(config)
 
+        target_index = index_name or self.default_index_name
+
         hits = await self.service.search(
-            index_name=index_name or self.default_index_name,
+            index_name=target_index,
             body=dsl_body,
             routing=routing,
             search_pipeline=config.search_pipeline

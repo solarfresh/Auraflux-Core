@@ -2,48 +2,86 @@ import pytest
 
 from auraflux_core.rag.retrievers.opensearch_retriever import (
     OpenSearchDSLBuilder, OpenSearchHybridRetriever)
-from auraflux_core.rag.schemas.retrievers import (OpenSearchHybridConfig,
+from auraflux_core.rag.schemas.retrievers import (HybridQueryItem,
+                                                  OpenSearchHybridConfig,
                                                   RetrievalResult)
 
 
 class TestOpenSearchDSLBuilder:
     def test_build_hybrid_query_basic(self):
+        items = [
+            HybridQueryItem(
+                query_text="python async",
+                query_vector=[0.1, 0.2, 0.3],
+                text_field="title",
+                vector_field="content_vector",
+            )
+        ]
         config = OpenSearchHybridConfig(
-            query_text="python async",
-            query_vector=[0.1, 0.2, 0.3],
+            query_items=items,
             top_k=3,
-            text_fields=["title^1.5", "content"],
-            vector_fields=["content_vector"],
         )
 
         dsl = OpenSearchDSLBuilder.build_hybrid_query(config)
 
         assert dsl["size"] == 3
         assert "hybrid" in dsl["query"]
-        queries = dsl["query"]["hybrid"]["queries"]
+
+        hybrid_body = dsl["query"]["hybrid"]
+        queries = hybrid_body["queries"]
+
         assert len(queries) == 2
         assert queries[0]["multi_match"]["query"] == "python async"
-        assert queries[0]["multi_match"]["fields"] == ["title^1.5", "content"]
+        assert queries[0]["multi_match"]["fields"] == ["title"]
+        assert queries[1]["knn"]["content_vector"]["vector"] == [0.1, 0.2, 0.3]
         assert queries[1]["knn"]["content_vector"]["k"] == 9
 
     def test_build_hybrid_query_with_filters(self):
+        items = [
+            HybridQueryItem(
+                query_text="test",
+                query_vector=[0.1, 0.2],
+                text_field="text",
+                vector_field="vec",
+            )
+        ]
         config = OpenSearchHybridConfig(
-            query_text="test",
-            query_vector=[0.1, 0.2],
+            query_items=items,
             top_k=5,
             filters={"project_id": "proj_123", "tags": ["v1", "v2"]},
-            text_fields=["text"],
-            vector_fields=["vec"],
         )
 
         dsl = OpenSearchDSLBuilder.build_hybrid_query(config)
 
-        assert "bool" in dsl["query"]
-        assert "filter" in dsl["query"]["bool"]
-        filters = dsl["query"]["bool"]["filter"]
+        assert "hybrid" in dsl["query"]
+        hybrid_body = dsl["query"]["hybrid"]
+
+        assert "filter" in hybrid_body
+        filter_clause = hybrid_body["filter"]
+        assert "bool" in filter_clause
+        assert "filter" in filter_clause["bool"]
+
+        filters = filter_clause["bool"]["filter"]
         assert len(filters) == 2
         assert {"term": {"project_id": "proj_123"}} in filters
         assert {"terms": {"tags": ["v1", "v2"]}} in filters
+
+    def test_build_hybrid_query_exceeds_max_queries_raises_error(self):
+        items = [
+            HybridQueryItem(
+                query_text=f"query {i}",
+                query_vector=[0.1, 0.2],
+                text_field=f"text_{i}",
+                vector_field=f"vec_{i}",
+            )
+            for i in range(3)
+        ]
+        config = OpenSearchHybridConfig(query_items=items, top_k=5)
+
+        with pytest.raises(ValueError) as exc_info:
+            OpenSearchDSLBuilder.build_hybrid_query(config)
+
+        assert "exceeds the OpenSearch hybrid limit of 5" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -59,22 +97,28 @@ class TestOpenSearchHybridRetriever:
             default_index_name="test_index",
         )
 
+        query_items = [
+            HybridQueryItem(
+                query_text="safety standards",
+                query_vector=None,
+                text_field="evidence_text",
+                vector_field="evidence_vector",
+            )
+        ]
+
         results = await retriever.retrieve(
-            query_text="safety standards",
+            query_items=query_items,
             top_k=2,
             filters={"project_id": "proj_abc"},
         )
 
-        # 1. Verify embedding model invocation via BaseEmbedding interface
         mock_embedding_model.embed_query.assert_awaited_once_with("safety standards")
 
-        # 2. Verify OpenSearch client call
         assert mock_opensearch_client.search.called
         call_kwargs = mock_opensearch_client.search.call_args.kwargs
         assert call_kwargs["index"] == "test_index"
         assert call_kwargs["params"]["search_pipeline"] == "rrf_question_oriented"
 
-        # 3. Verify standard result mapping
         assert len(results) == 2
         assert isinstance(results[0], RetrievalResult)
         assert results[0].id == "doc_1"
@@ -96,6 +140,30 @@ class TestOpenSearchHybridRetriever:
             default_index_name="empty_index",
         )
 
-        results = await retriever.retrieve(query_text="nonexistent query")
+        query_items = [
+            HybridQueryItem(
+                query_text="nonexistent query",
+                query_vector=None,
+                text_field="text",
+                vector_field="vector",
+            )
+        ]
+
+        results = await retriever.retrieve(query_items=query_items)
 
         assert results == []
+
+    async def test_retrieve_empty_query_items(
+        self, mock_opensearch_client, mock_embedding_model
+    ):
+        retriever = OpenSearchHybridRetriever(
+            client=mock_opensearch_client,
+            embedding_model=mock_embedding_model,
+            default_index_name="test_index",
+        )
+
+        results = await retriever.retrieve(query_items=[])
+
+        assert results == []
+        mock_embedding_model.embed_query.assert_not_called()
+        mock_opensearch_client.search.assert_not_called()

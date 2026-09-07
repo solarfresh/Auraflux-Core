@@ -2,7 +2,8 @@ from typing import Any, Dict, List, Optional
 
 from auraflux_core.core.schemas.tools import ToolConfig
 from auraflux_core.core.tools.base_tool import BaseTool
-from auraflux_core.rag.schemas.retrievers import HybridRetrieverInput
+from auraflux_core.rag.schemas.retrievers import (HybridQueryItem,
+                                                  HybridRetrieverInput)
 
 
 class HybridRetrieverTool(BaseTool):
@@ -21,10 +22,8 @@ class HybridRetrieverTool(BaseTool):
 
     async def run(
         self,
-        query_text: str,
+        query_items: List[Dict[str, Any]],
         top_k: int = 5,
-        text_fields: Optional[List[str]] = None,
-        vector_fields: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> Any:
@@ -32,13 +31,25 @@ class HybridRetrieverTool(BaseTool):
         Executes hybrid retrieval through the injected retriever engine.
         Implements BaseTool.run() abstract method.
         """
-        self.logger.info(f"Executing hybrid retrieval for query: '{query_text}' with top_k={top_k}")
+        self.logger.info(f"Executing hybrid retrieval with {len(query_items)} query items, top_k={top_k}, filters={filters}")
+
+        items: List[HybridQueryItem] = [
+            HybridQueryItem(
+                query_text=raw_item.get("query_text", ""),
+                query_vector=None,
+                text_field=raw_item.get("text_field", "text"),
+                vector_field=raw_item.get("vector_field", "vector")
+            )
+            for raw_item in query_items
+        ]
+
+        if not items:
+            self.logger.warning("No valid query items provided to hybrid_retriever.")
+            return []
 
         results = await self.retriever.retrieve(
-            query_text=query_text,
+            query_items=items,
             top_k=top_k,
-            text_fields=text_fields,
-            vector_fields=vector_fields,
             filters=filters,
             **kwargs
         )

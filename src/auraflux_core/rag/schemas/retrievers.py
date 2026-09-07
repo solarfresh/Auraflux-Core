@@ -3,19 +3,22 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+class HybridQueryItem(BaseModel):
+    """Represents a single query target bound to its specific index fields."""
+    query_text: str
+    query_vector: Optional[List[float]]
+    text_field: str
+    vector_field: str
+
+
 class HybridSearchConfig(BaseModel):
     """
     Vendor-agnostic configuration model encapsulating essential parameters
     for executing a hybrid (lexical + dense vector) search query.
     """
-    query_text: str = Field(
-        ...,
-        min_length=1,
-        description="Lexical query text for keyword/BM25 matching."
-    )
-    query_vector: List[float] = Field(
-        ...,
-        description="Dense vector embedding of the query for semantic search."
+    query_items: List[HybridQueryItem] = Field(
+        default_factory=list,
+        description="Collection of multiple query items, each with 1-to-1 field mapping."
     )
     top_k: int = Field(
         default=5,
@@ -26,21 +29,13 @@ class HybridSearchConfig(BaseModel):
         default=None,
         description="Generic key-value criteria for payload/metadata filtering (e.g., {'project_id': 'proj_123'})."
     )
-    search_pipeline: Optional[str] = Field(
-        default=None,
-        description="Optional re-ranking or search execution pipeline/strategy identifier."
-    )
 
 
 class OpenSearchHybridConfig(HybridSearchConfig):
-    """OpenSearch-specific hybrid search parameters extending the base config."""
-    text_fields: List[str] = Field(
-        default_factory=lambda: ["text"],
-        description="List of text fields for multi_match query, supporting boost notation (e.g., 'title^1.5')."
-    )
-    vector_fields: List[str] = Field(
-        default_factory=lambda: ["vector"],
-        description="List of vector field names to construct kNN streams."
+    """OpenSearch-specific hybrid search configuration supporting multi-query fusion."""
+    search_pipeline: Optional[str] = Field(
+        default=None,
+        description="Name of the OpenSearch search pipeline configured for score normalization or RRF."
     )
 
 
