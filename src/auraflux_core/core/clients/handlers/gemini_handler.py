@@ -2,23 +2,15 @@ from typing import Any, Generator, List, Optional
 
 from google import genai
 from google.genai import errors, types
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
+from tenacity import (retry, retry_if_exception_type,
+                      retry_if_not_exception_type, stop_after_attempt,
+                      wait_exponential)
 
 from auraflux_core.core.clients.handlers.base_handler import BaseHandler
 from auraflux_core.core.configs.logging_config import setup_logging
-from auraflux_core.core.schemas.clients import (
-    EmbeddingRequest,
-    EmbeddingResponse,
-    LLMRequest,
-    LLMResponse,
-    ProviderConfig,
-)
-from auraflux_core.core.tools.base_tool import ToolSpecConverter
+from auraflux_core.core.schemas.clients import (EmbeddingRequest,
+                                                EmbeddingResponse, LLMRequest,
+                                                LLMResponse, ProviderConfig)
 
 
 class GeminiHandler(BaseHandler):
@@ -60,20 +52,21 @@ class GeminiHandler(BaseHandler):
             response_text = response.text
             usage_metadata = response.usage_metadata
 
-            # Extract tool calls safely
-            function_call = None
+            # Extract tool calls safely into a List[Dict[str, Any]] format
+            tool_calls: Optional[List[dict]] = None
             if response.candidates and len(response.candidates) > 0:
                 candidate = response.candidates[0]
-                if candidate.content and candidate.content.parts and len(candidate.content.parts) > 0:
-                    part = candidate.content.parts[0]
-                    if hasattr(part, 'function_call') and part.function_call:
-                        function_call = part.function_call
-
-            tool_calls = (
-                {'tool': function_call.name, 'args': function_call.args}
-                if function_call is not None
-                else None
-            )
+                if candidate.content and candidate.content.parts:
+                    extracted_calls = []
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'function_call') and part.function_call:
+                            func_call = part.function_call
+                            extracted_calls.append({
+                                'name': func_call.name,
+                                'arguments': dict(func_call.args) if func_call.args else {}
+                            })
+                    if extracted_calls:
+                        tool_calls = extracted_calls
 
             total_tokens = getattr(usage_metadata, 'total_token_count', 0) if usage_metadata else 0
 
@@ -90,9 +83,9 @@ class GeminiHandler(BaseHandler):
             raise RuntimeError(f"An error occurred while calling the Gemini API: {e}")
 
     @retry(
-        stop=stop_after_attempt(3),
+        stop=stop_after_attempt(5),
         wait=wait_exponential(multiplier=1.2, min=30, max=300),
-        retry=retry_if_exception_type(errors.ServerError),
+        retry=retry_if_not_exception_type(ValueError),
         reraise=True,
     )
     async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
@@ -109,7 +102,6 @@ class GeminiHandler(BaseHandler):
                 else None,
             )
 
-            # 修正處：直接從 res.embeddings 取得向量列表
             embeddings_list: List[List[float]] = []
             if hasattr(res, 'embeddings') and res.embeddings:
                 embeddings_list = [e.values for e in res.embeddings if e.values is not None]
@@ -179,13 +171,7 @@ class GeminiHandler(BaseHandler):
         tools = None
         tool_config = None
         if request.tools is not None:
-            tools = [
-                types.Tool(
-                    function_declarations=[
-                        ToolSpecConverter.to_gemini(tool) for tool in request.tools
-                    ]
-                )
-            ]
+            tools = request.tools
             tool_config = types.ToolConfig(
                 function_calling_config=types.FunctionCallingConfig(
                     mode=types.FunctionCallingConfigMode.AUTO

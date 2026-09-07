@@ -1,38 +1,47 @@
 import json
-import re
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List
 
+from auraflux_core.core.agents.pipelines.base import (BaseAgentPipeline,
+                                                      PipelineRegistry)
 from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import setup_logging
+from auraflux_core.core.messages import PromptFormatter
+from auraflux_core.core.parsers import OutputParser
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
-from auraflux_core.core.schemas.tools import (ToolCallProtocol,
-                                              ToolExecutionStrategy)
-from auraflux_core.core.tools.base_tool import BaseTool
+from auraflux_core.core.tools import ToolExecutor
 
 
 class BaseAgent(ABC):
     """
-    Base class for all agents in the Auraflux system, using AutoGen's ConversableAgent as the foundation.
+    Base class for all agents in the Auraflux system.
 
-    This class provides a shared logging setup and a consistent initialization pattern.
-    The agent's specific behavior should be defined in subclasses by implementing their
-    role within an AutoGen GroupChat or other conversational flows.
+    Provides infrastructure capabilities (LLM clients, PromptFormatter, OutputParser, ToolExecutor)
+    and delegates execution flow control to a stateless BasePipeline strategy.
     """
     def __init__(self, config: AgentConfig, client_manager: ClientManager):
         self.config = config
         self.client_manager = client_manager
         self.logger = setup_logging(name=f"[{self.config.name}]")
         self.logger.info(f"Agent '{self.config.name}' initialized.")
-        if config.system_message is not None:
-            self.system_message = config.system_message
-        else:
-            self.system_message = str(self._message_mapper(self.get_system_message_map()))
 
-        self._tool_cache: Optional[Dict[str, Any]] = None
+        self.prompt_formatter = PromptFormatter(
+            config=self.config,
+            system_message_map=self.get_system_message_map(),
+        )
+
+        self.tool_executor = ToolExecutor(
+            tools=self.config.tools or [],
+            tool_call_protocol=self.config.tool_call_protocol
+        )
+
+        self.output_parser = OutputParser()
+
+        pipeline_name = getattr(self.config, "pipeline_name", "direct")
+        self.pipeline: BaseAgentPipeline = PipelineRegistry.get(pipeline_name)
 
     @property
     def provider(self) -> str:
@@ -46,36 +55,20 @@ class BaseAgent(ABC):
     def name(self) -> str:
         return self.config.name
 
-    async def generate(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        copied_messages = [deepcopy(msg) for msg in messages[-self.config.turn_limit:]]
+    @property
+    def system_message(self) -> str:
+        """Dynamically format the system message using PromptFormatter."""
+        return self.prompt_formatter.format_system_message()
+
+    async def generate(self, messages: List[Message]) -> Message:
+        """Pure LLM inference execution capability."""
+        copied_messages = [deepcopy(msg) for msg in messages]
 
         try:
-            if self.config.tool_execution_strategy == 'DIRECT':
-                tool_output_message = await self.generate_tool_message(copied_messages, tool_args_map=tool_args_map)
-                return tool_output_message
-
-            if self.config.tool_execution_strategy == 'REFLECTIVE':
-                last_message = await self.generate_tool_message(copied_messages)
-                self.logger.debug(f"Tool output: {last_message.content}")
-                copied_messages.append(last_message)
-
-            return await self.generate_llm_message(copied_messages)
-        except Exception as e:
-            self.logger.error(f"Error during agent generation for agent '{self.name}': {e}")
-            return Message(role='assistant', content="Error: Could not generate a response.", name=self.name)
-
-    async def generate_llm_message(self, messages: List[Message]) -> Message:
-        last_message = messages[-1]
-
-        try:
-            cot_to_append = self.config.cot_message or self._message_mapper(self.get_cot_message_map())
-            if cot_to_append:
-                last_message.content += f"\n\n{cot_to_append}"
-
             request = LLMRequest(
                 provider=self.provider,
                 model=self.model,
-                messages=messages,
+                messages=copied_messages,
                 system_message=self.system_message,
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
@@ -86,21 +79,20 @@ class BaseAgent(ABC):
             response: LLMResponse = await self.client_manager.generate(request)
             self.logger.debug(f"Received response from LLM: {response}")
 
-            output_string = self.postprocess_llm_output(response.text)
+            output_string = self.postprocess_output(response.text)
 
-            return Message(role='assistant', content=output_string, name=self.name, token_usage=response.token_usage)
+            return Message(
+                role='assistant',
+                content=output_string,
+                name=self.name,
+                token_usage=response.token_usage
+            )
         except Exception as e:
             self.logger.error(f"Error during LLM generation for agent '{self.name}': {e}")
             raise e
 
-    async def generate_tool_message(self, messages: List[Message], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        self.logger.info("Generating tool message...")
-        tool_call_data = await self._decide_tool_calls(messages)
-        messsage = await self._execute_tool_calls(tool_call_data, tool_args_map)
-        return messsage
-
     def generate_stream(self, message: Message, chat_history: List[Message]) -> Generator[Message, Any, Any]:
-
+        """Supports streaming response generation."""
         messages = [deepcopy(msg) for msg in chat_history]
         messages.append(message)
 
@@ -116,137 +108,29 @@ class BaseAgent(ABC):
 
     @abstractmethod
     def get_system_message_map(self) -> Dict[str, str]:
-        """
-        Abstract method to be implemented by subclasses to provide a mapping of model families
-        to their respective system messages.
-        """
+        """Abstract method to be implemented by subclasses to provide system messages."""
         pass
 
-    def get_tool_map(self) -> Dict[str, BaseTool]:
-        if not self._tool_cache:
-            if len(self.config.tools):
-                self._tool_cache = {tool.get_name(): tool for tool in self.config.tools}
-            else:
-                raise ValueError(f"No tools configured for {self.name}. Please check the agent configuration.")
-
-        return self._tool_cache
-
-    def get_cot_message_map(self) -> Dict[str, str] | None:
-        """
-        Method to be optionally overridden by subclasses to provide a mapping of model families
-        to their respective chain-of-thought (CoT) messages.
-        """
-        return None
-
-    def get_tool_call(self, messages: List[Message]) -> Dict[str, Any]:
-        return {}
-
-    def get_tool_message_map(self) -> Dict[str, str] | None:
-        """
-        Method to be optionally overridden by subclasses to provide a mapping of model families
-        to their respective tool-use messages.
-        """
-        return None
-
-    async def _decide_tool_calls(self, messages: List[Message]) -> Dict[str, Any]:
-        tool_call_data = {}
-        tool_message = self._message_mapper(self.get_tool_message_map())
-        tool_map = self.get_tool_map()
-        if self.config.tool_call_protocol == ToolCallProtocol.PROMPT.value:
-            if tool_message is None:
-                self.logger.warning(f"Tool call protocol is set to PROMPT but no tool message is defined for agent '{self.name}'. Proceeding without tool call.")
-                return {}
-
-            request = LLMRequest(
-                provider=self.provider,
-                model=self.model,
-                messages=messages,
-                system_message=tool_message,
-                thinking_level=self.config.thinking_level
+    def register_tools(self, tools: Any) -> "BaseAgent":
+        """Delegates tool registration directly to the underlying ToolExecutor."""
+        if self.tool_executor:
+            self.tool_executor.register_tools(tools)
+            self.logger.info(
+                f"Updated tools via ToolExecutor. Active tools: {list(self.tool_executor.tool_registry.keys())}"
             )
-            self.logger.debug(f"Sending request to LLM: {request}")
-            response: LLMResponse = await self.client_manager.generate(request)
-            self.logger.debug(f"Received response from LLM: {response}")
-            tool_call_data = self.postprocess_tool_output(response.text)
-        elif self.config.tool_call_protocol == ToolCallProtocol.NATIVE.value:
-            request = LLMRequest(
-                provider=self.provider,
-                model=self.model,
-                messages=messages,
-                system_message=self.system_message,
-                thinking_level=self.config.thinking_level,
-                tools=[t for t in tool_map.values()]
-            )
-            response: LLMResponse = await self.client_manager.generate(request)
+        return self
 
-            if response.tool_calls:
-                tool_call_data = response.tool_calls
-            else:
-                raise ValueError("NATIVE protocol expected a tool call but got text response.")
-        else:
-            tool_call_data  = self.get_tool_call(messages=messages)
-
-        return tool_call_data
-
-    async def _execute_tool_calls(self, tool_call_data: Dict[str, Any], tool_args_map: Dict[str, Any] | None = None) -> Message:
-        tool_name = tool_call_data.get('tool', 'default')
-        tool_call_args = tool_call_data.get('args', {})
-        if tool_args_map is not None:
-            tool_call_args.update(**tool_args_map.get(tool_name, {}))
-
-        tool = self.get_tool_map()[tool_name]
-        self.logger.debug("Retrieved tool for tool call.")
-
-        if tool is None:
-            self.logger.warning(f"No tool found for tool call: '{tool_name}'")
-            return Message(role='assistant', content=f"Error: Tool '{tool_name}' not available.", name=self.name)
-
-        try:
-            self.logger.debug(f"Executing tool '{tool_name}' with args: {tool_call_args}")
-            tool_output = await tool.run(**tool_call_args)
-
-            if isinstance(tool_output, str):
-                pass
-            elif isinstance(tool_output, dict):
-                tool_output = json.dumps(tool_output, ensure_ascii=False)
-            else:
-                raise ValueError(f"Unsupported tool output type: {type(tool_output)}. Expected str or dict.")
-
-            return Message(role='assistant', content=tool_output, name=self.name)
-        except Exception as e:
-            self.logger.error(f"Error executing tool '{tool_name}': {e}")
-            raise e
-
-    def _message_mapper(self, msg_map: Dict[str, str] | None) -> str | None:
-        if msg_map is None:
-            return None
-
-        return msg_map.get(self.config.lang, 'default')
-
-    def postprocess_tool_output(self, output_string: str) -> Any:
-        json_object = self._parse_json_output(output_string)
-        return json_object
-
-    def postprocess_llm_output(self, output_string: str) -> str:
+    def postprocess_output(self, output_string: str) -> str:
+        """Post-processes raw LLM text based on configuration format."""
         if self.config.output_format == 'JSON':
-            json_object = self._parse_json_output(output_string)
+            json_object = self.output_parser.parse_json(output_string)
             return json.dumps(json_object, ensure_ascii=False)
 
-        return output_string
+        return self.output_parser.strip_thinking_tags(output_string)
 
-    def _parse_json_output(self, output_string: str) -> Dict:
-        json_pattern = r"```json\s*(\{.*\})\s*```"
-        match = re.search(json_pattern, output_string, re.DOTALL)
-        if match:
-            json_string = match.group(1)
-        else:
-            try:
-                return json.loads(output_string)
-            except Exception as e:
-                self.logger.warning(output_string)
-                raise e
-
-        clean_string = re.sub(r'\\\w+\{([^}]+)\}', r'->(\1)->', json_string)
-        clean_string = clean_string.replace('$', '')
-
-        return json.loads(clean_string)
+    async def run(self, payload: Dict[str, Any]) -> Any:
+        """
+        Main execution entry point.
+        Delegates control flow execution directly to the bound Pipeline strategy.
+        """
+        return await self.pipeline.execute(agent=self, payload=payload)

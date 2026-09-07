@@ -70,14 +70,18 @@ class ToolSpecConverter:
         }
 
     @staticmethod
-    def to_gemini(tool: BaseTool) -> Any:
-        raw_params = tool.get_parameters()
+    def to_gemini(tool: BaseTool) -> types.Tool:
+        raw_parameters = tool.get_parameters()
 
-        return types.FunctionDeclaration(
+        # Convert Dict[str, Any] to types.Schema
+        parameters_schema = types.Schema.model_validate(raw_parameters) if raw_parameters else None
+
+        function_decl = types.FunctionDeclaration(
             name=tool.get_name(),
             description=tool.get_description(),
-            parameters=ToolSpecConverter._dict_to_gemini_schema(raw_params)
+            parameters=parameters_schema  # Successfully typed as types.Schema | None
         )
+        return types.Tool(function_declarations=[function_decl])
 
     @staticmethod
     def to_prompt_text(tool: BaseTool) -> str:

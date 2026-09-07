@@ -26,11 +26,18 @@ dependencies = [
     "networkx==3.6.1",
     "numpy==2.4.3",
     "openai==2.23.0",
+    "opensearch-py==3.2.0",
     "pydantic==2.12.5",
     "pydantic-settings==2.13.1",
-    "pygraphviz==1.14"
+    "pygraphviz==1.14",
+    "tenacity==9.1.4"
 ]
 
 [project.urls]
 Homepage = "https://github.com/solarfresh/Auraflux-Core"
 Issues = "https://github.com/solarfresh/Auraflux-Core/issues"
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term --cov-report=html"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+pythonpath = ["src"]

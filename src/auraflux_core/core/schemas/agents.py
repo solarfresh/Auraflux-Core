@@ -23,6 +23,7 @@ class AgentConfig(BaseModel):
     lang: str = 'en'
     system_message: str | None = None
     output_format: Literal['TEXT', 'JSON'] = 'TEXT'
+    pipeline_name: Literal['direct', 'plan_and_execute'] = 'direct'
 
     thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
 
@@ -31,7 +32,6 @@ class AgentConfig(BaseModel):
     tool_call_protocol: Literal['NATIVE', 'PROMPT', 'FORCE'] = 'NATIVE'
     tool_execution_strategy: Literal['NONE', 'DIRECT', 'REFLECTIVE'] = 'NONE'
 
-    cot_message: str | None = None
     turn_limit: int = 100
     max_tokens: NonNegativeInt = 4096
     temperature: float = 0.7

@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
@@ -59,7 +59,7 @@ class LLMResponse(BaseModel):
     """A standardized schema for all model inference responses."""
     text: str
     token_usage: int = 0
-    tool_calls: Optional[Dict[str, Any]] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
 
 
 class ModelConfig(BaseModel):
