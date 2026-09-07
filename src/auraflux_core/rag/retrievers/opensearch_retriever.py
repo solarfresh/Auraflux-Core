@@ -112,6 +112,8 @@ class OpenSearchHybridRetriever(BaseRetriever):
             formatter_fn: Optional custom callable to transform `_source` dict into the target text string.
                           Defaults to a generic JSON sanitizer (stripping huge vector arrays).
         """
+        super().__init__()
+
         self.service = OpenSearchService(client)
         self.embedding_model = embedding_model
         self.default_index_name = default_index_name
@@ -128,6 +130,8 @@ class OpenSearchHybridRetriever(BaseRetriever):
         self,
         query_text: str,
         top_k: int = 5,
+        text_fields: Optional[List[str]] = None,
+        vector_fields: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
         index_name: Optional[str] = None,
         routing: Optional[str] = None
@@ -142,8 +146,8 @@ class OpenSearchHybridRetriever(BaseRetriever):
             query_vector=query_vector,
             top_k=top_k,
             filters=filters,
-            text_fields=self.text_fields,
-            vector_fields=self.vector_fields,
+            text_fields=text_fields or self.text_fields,
+            vector_fields=vector_fields or self.vector_fields,
             search_pipeline=self.default_search_pipeline
         )
         dsl_body = OpenSearchDSLBuilder.build_hybrid_query(config)

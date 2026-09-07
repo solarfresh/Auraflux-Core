@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.rag.schemas.retrievers import RetrievalResult
 
 
@@ -10,11 +11,16 @@ class BaseRetriever(ABC):
     for all vendor-specific retrieval engines.
     """
 
+    def __init__(self):
+        self.logger = setup_logging(name="[Retriever]")
+
     @abstractmethod
     async def retrieve(
         self,
         query_text: str,
         top_k: int = 5,
+        text_fields: Optional[List[str]] = None,
+        vector_fields: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
         **kwargs: Any
     ) -> List[RetrievalResult]:
