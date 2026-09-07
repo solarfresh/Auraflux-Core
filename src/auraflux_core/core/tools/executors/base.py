@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from typing import Any, Dict, List, Optional, Union
 
+from auraflux_core.core.configs.logging_config import setup_logging
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.schemas.tools import ToolCallProtocol
 from auraflux_core.core.tools.base_tool import BaseTool, ToolSpecConverter
@@ -26,6 +27,7 @@ class BaseToolExecutor(ABC):
             tools (Optional[List[BaseTool]]): List of configured tool instances.
             tool_call_protocol (str): Protocol used for tool calling (e.g., NATIVE, PROMPT).
         """
+        self.logger = setup_logging(name=f"[{self.__class__.__name__}]")
         self.tool_call_protocol = tool_call_protocol
         self.tool_registry: Dict[str, BaseTool] = {
             tool.get_name(): tool for tool in (tools or [])

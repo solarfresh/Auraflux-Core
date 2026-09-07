@@ -102,11 +102,22 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
         for result in raw_results:
             if isinstance(result, ObjectiveClaimVerdict):
                 verdicts.append(result)
+
                 if result.status == "UNSUPPORTED":
                     has_block_condition = True
+
+                elif result.status == "PARTIALLY_VERIFIED":
+                    has_conflict = False
+                    if result.diagnostics and isinstance(result.diagnostics.boundary_conflicts, dict):
+                        has_conflict = result.diagnostics.boundary_conflicts.get("has_conflict", False)
+
+                    if has_conflict or result.compliance_gap is not None:
+                        has_block_condition = True
+
             elif isinstance(result, BaseException):
                 err_msg = str(result)
                 self.logger.error(f"Error during claim verification: {err_msg}")
                 errors.append(err_msg)
+                has_block_condition = True
 
         return verdicts, errors, has_block_condition
