@@ -5,7 +5,7 @@ import pytest
 
 from auraflux_core.alignment.agents import BaseAlignmentAgent
 from auraflux_core.alignment.objective_claim.schemas import (
-    DiagnosticAnalysis, ObjectiveClaimVerdict)
+    ObjectiveDiagnosticAnalysis, ObjectiveClaimVerdict)
 from auraflux_core.alignment.strategies import AlignmentOrchestrationStrategy
 from auraflux_core.core.orchestrators.state import OrchestratorState
 
@@ -20,7 +20,7 @@ def mock_agent():
             status="VERIFIED",
             proposition_id="c1",
             claim_text="Medical claim",
-            diagnostics=DiagnosticAnalysis.model_construct(),
+            diagnostics=ObjectiveDiagnosticAnalysis.model_construct(),
         )
     )
     return agent
@@ -87,7 +87,7 @@ async def test_alignment_orchestration_unsupported_blocks(
         status="UNSUPPORTED",
         proposition_id="c2",
         claim_text="Unsupported text",
-        diagnostics=DiagnosticAnalysis.model_construct(),
+        diagnostics=ObjectiveDiagnosticAnalysis.model_construct(),
     )
 
     agents = {"ObjectiveClaimAgent": mock_agent}
