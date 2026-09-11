@@ -2,41 +2,22 @@ import json
 from typing import Any, Dict, List, Optional
 
 from auraflux_core.alignment.objective_claim.schemas import (
-    DiagnosticAnalysis, ObjectiveClaimVerdict, TripleItem)
+    ObjectiveDiagnosticAnalysis, ObjectiveClaimVerdict, TripleItem)
+from auraflux_core.alignment.pipelines import AlignmentHandler
 from auraflux_core.core.agents.base_agent import BaseAgent
-from auraflux_core.core.agents.pipelines.plan_and_execute import \
-    PlanAndExecuteHandler
 from auraflux_core.core.schemas.messages import Message
 
 
-class ObjectiveClaimAgent(BaseAgent, PlanAndExecuteHandler):
+class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
     """
     Specialized Alignment Agent for diagnosing and verifying objective claims.
 
     Acts as a Domain Provider:
     1. Inherits infrastructure capabilities from BaseAgent (LLM generation, ToolExecutor)[cite: 2].
-    2. Implements PlanAndExecuteHandler to supply domain prompts, tool mapping, and output parsing
-       to the decoupled PlanAndExecutePipeline without polluting BaseAgent.
+    2. Inherits shared retrieval spec logic from BaseAlignmentHandler.
+    3. Implements PlanAndExecuteHandler via BaseAlignmentHandler to supply domain prompts,
+       a deterministic tool execution workflow, and output parsing to PlanAndExecutePipeline[cite: 2].
     """
-
-    TARGET_FIELD_MAP = {
-        "question": {
-            "text": "target_question",
-            "vector": "question_vector"
-        },
-        "concept_title": {
-            "text": "concept_title",
-            "vector": "concept_vector"
-        },
-        "concept_desc": {
-            "text": "concept_description",
-            "vector": "concept_vector"
-        },
-        "evidence": {
-            "text": "evidence_text",
-            "vector": "evidence_vector"
-        }
-    }
 
     def get_system_message_map(self) -> Dict[str, str]:
         return {
@@ -119,106 +100,21 @@ class ObjectiveClaimAgent(BaseAgent, PlanAndExecuteHandler):
         )
         return [Message(role="user", content=prompt, name=self.name)]
 
-    def _clean_field_name(self, raw_field: Any, fallback: str) -> str:
-        """Extracts the primary field string and strips any List structure or Boost annotations (e.g., ['evidence_text^2.0'] -> 'evidence_text')."""
-        if isinstance(raw_field, list) and raw_field:
-            field = str(raw_field[0])
-        elif isinstance(raw_field, str) and raw_field:
-            field = raw_field
-        else:
-            field = fallback
+    async def execute_tool_workflow(
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any]
+    ) -> List[Message]:
+        """Stage 2 Hook: Deterministic execution of the retrieval tool workflow."""
+        tool_results: List[Message] = []
+        retriever_spec = self._build_retriever_spec(payload, plan_output)
 
-        # Strip Boost annotations (e.g., ^2.0) to ensure a clean field name
-        return field.split("^")[0].strip()
+        if retriever_spec and self.tool_executor:
+            rag_msg = await self.tool_executor.run(
+                tool_name=retriever_spec["tool_name"],
+                tool_args=retriever_spec["tool_args"]
+            )
+            tool_results.append(rag_msg)
 
-    def extract_tool_call_spec(self, payload: Dict[str, Any], plan_output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Stage 2 Hook: Extracts strict 1-to-1 paired query_items for hybrid_retriever tool call."""
-
-        raw_queries = plan_output.get("queries", [])
-        triples = plan_output.get("triples", [])
-
-        # 1. Fallback: If queries is empty, auto-construct a high-precision query item from semantic triples
-        if not isinstance(raw_queries, list) or not raw_queries:
-            if isinstance(triples, list) and triples:
-                # Build clean keyphrase from Subject + Object of the first triple
-                t = triples[0]
-                subj = t.get("subject", "")
-                obj = t.get("object", "")
-                constructed_query = f"{subj} {obj}".strip()
-
-                if constructed_query:
-                    raw_queries = [{
-                        "query_text": constructed_query,
-                        "target_type": "evidence",
-                        "text_field": "evidence_text",
-                        "vector_field": "evidence_vector"
-                    }]
-
-        if not raw_queries:
-            return None
-
-        query_items: List[Dict[str, Any]] = []
-
-        for q in raw_queries:
-            if not isinstance(q, dict):
-                continue
-
-            q_text = q.get("query_text")
-            if not q_text:
-                continue
-
-            target_type = q.get("target_type", "evidence")
-
-            # Safely resolve fallback defaults from TARGET_FIELD_MAP
-            target_config = self.TARGET_FIELD_MAP.get(target_type) or self.TARGET_FIELD_MAP.get("evidence", {})
-            default_t = str(target_config.get("text", "evidence_text"))
-            default_v = str(target_config.get("vector", "evidence_vector"))
-
-            # Extract and sanitize field names
-            raw_t = q.get("text_field") or q.get("text_fields")
-            raw_v = q.get("vector_field") or q.get("vector_fields")
-
-            t_field = self._clean_field_name(raw_t, default_t)
-            v_field = self._clean_field_name(raw_v, default_v)
-
-            query_items.append({
-                "query_text": q_text,
-                "text_field": t_field,
-                "vector_field": v_field
-            })
-
-        # Optional: If only 1 general query exists, append a concise triple-based query item for high precision
-        if len(query_items) == 1 and isinstance(triples, list) and len(triples) > 0:
-            first_triple = triples[0]
-            s = first_triple.get("subject", "")
-            o = first_triple.get("object", "")
-            triple_phrase = f"{s} {o}".strip()
-
-            # Avoid duplicating if query_text is already similar
-            if triple_phrase and triple_phrase.lower() not in query_items[0]["query_text"].lower():
-                query_items.append({
-                    "query_text": triple_phrase,
-                    "text_field": "concept_title",  # Perfect fit for precise Subject/Object titles
-                    "vector_field": "concept_vector"
-                })
-
-        if not query_items:
-            return None
-
-        tool_args: Dict[str, Any] = {
-            "query_items": query_items,
-            "top_k": plan_output.get("top_k", 5),
-        }
-
-        if payload.get("routing_key"):
-            tool_args["routing"] = str(payload["routing_key"])
-        if payload.get("index_name"):
-            tool_args["index_name"] = str(payload["index_name"])
-
-        return {
-            "tool_name": "hybrid_retriever",
-            "tool_args": tool_args
-        }
+        return tool_results
 
     def build_synthesis_messages(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], tool_results: List[Message]
@@ -326,7 +222,7 @@ class ObjectiveClaimAgent(BaseAgent, PlanAndExecuteHandler):
         triples = [
             TripleItem(**item) for item in plan_output.get("triples", [])
         ]
-        diagnostics = DiagnosticAnalysis(**plan_output.get("diagnostics", {}))
+        diagnostics = ObjectiveDiagnosticAnalysis(**plan_output.get("diagnostics", {}))
 
         diagnostic_eval = parsed_data.get("diagnostic_evaluation", {})
         boundary_eval = diagnostic_eval.get("boundary_conflicts_eval", "")
@@ -373,7 +269,7 @@ class ObjectiveClaimAgent(BaseAgent, PlanAndExecuteHandler):
     ) -> ObjectiveClaimVerdict:
         """
         Main execution facade for verifying an individual objective claim.
-        Delegates the execution directly to the injected/configured Pipeline strategy.
+        Delegates execution directly to the bound Pipeline strategy via agent.run()[cite: 2].
         """
         payload: Dict[str, Any] = {
             "proposition_id": proposition_id,
@@ -386,5 +282,5 @@ class ObjectiveClaimAgent(BaseAgent, PlanAndExecuteHandler):
         if index_name is not None:
             payload["index_name"] = index_name
 
-        # Executes the Strategy pipeline configured on the Agent instance
-        return await self.pipeline.execute(agent=self, payload=payload)
+        # Executes via BaseAgent.run(), which delegates directly to self.pipeline[cite: 2]
+        return await self.run(payload)

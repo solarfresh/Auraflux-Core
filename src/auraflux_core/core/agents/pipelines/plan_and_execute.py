@@ -20,7 +20,10 @@ class PlanAndExecuteHandler(ABC):
         pass
 
     @abstractmethod
-    def extract_tool_call_spec(self, payload: Dict[str, Any], plan_output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def execute_tool_workflow(
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any]
+    ) -> List[Message]:
+        """Stage 2: Deterministic code-controlled tool execution workflow."""
         pass
 
     @abstractmethod
@@ -38,29 +41,24 @@ class PlanAndExecuteHandler(ABC):
 
 @PipelineRegistry.register("plan_and_execute")
 class PlanAndExecutePipeline(BaseAgentPipeline):
+    """
+    Deterministic Plan-and-Execute Pipeline.
+    Stage 1: Intent Planning (LLM)
+    Stage 2: Code-controlled Tool Execution (Deterministic Workflow)
+    Stage 3: Synthesis & Verdict Generation (LLM)
+    """
 
     async def execute(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
-        # Ensure agent implements the required handler contract
         if not isinstance(agent, PlanAndExecuteHandler):
             raise TypeError(f"Agent '{agent.name}' must implement PlanAndExecuteHandler interface.")
 
-        # Stage 1: Plan
         plan_messages = agent.build_plan_messages(payload)
         plan_response = await agent.generate(plan_messages)
         plan_output = agent.output_parser.parse_json(plan_response.content)
 
-        # Stage 2: Tool
-        tool_spec = agent.extract_tool_call_spec(payload, plan_output)
-        tool_results = []
-        if tool_spec and agent.tool_executor:
-            tool_name = tool_spec.get("tool_name")
-            tool_args = tool_spec.get("tool_args", {})
+        # Stage 2: Tool Workflow
+        tool_results: List[Message] = await agent.execute_tool_workflow(payload, plan_output)
 
-            if tool_name and tool_name in agent.tool_executor.tool_registry:
-                tool_msg = await agent.tool_executor.run(tool_name=tool_name, tool_args=tool_args)
-                tool_results.append(tool_msg)
-
-        # Stage 3: Synthesis
         synth_messages = agent.build_synthesis_messages(payload, plan_output, tool_results)
         synth_response = await agent.generate(synth_messages)
 

@@ -1,16 +1,11 @@
 from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
 
-
-class TripleItem(BaseModel):
-    """Expresses a bound semantic triple: Subject -> Predicate -> Object."""
-
-    subject: str = Field(..., description="Subject entity.")
-    predicate: str = Field(..., description="Relation, predicate, or operator.")
-    object: str = Field(..., description="Metric, constraint, or object entity.")
+from auraflux_core.alignment.schemas import TripleItem
 
 
-class DiagnosticAnalysis(BaseModel):
+class ObjectiveDiagnosticAnalysis(BaseModel):
     """Orthogonal diagnostic dimensions for objective claims."""
 
     implicit_premises: List[str] = Field(
@@ -36,7 +31,7 @@ class ObjectiveClaimVerdict(BaseModel):
         default_factory=list,
         description="Bound semantic triples representing the structured facts of the claim."
     )
-    diagnostics: DiagnosticAnalysis = Field(..., description="Orthogonal diagnostic analysis.")
+    diagnostics: ObjectiveDiagnosticAnalysis = Field(..., description="Orthogonal diagnostic analysis.")
     status: Literal["VERIFIED", "PARTIALLY_VERIFIED", "UNSUPPORTED"] = Field(
         ...,
         description="Final verification state. UNSUPPORTED triggers a block condition."
