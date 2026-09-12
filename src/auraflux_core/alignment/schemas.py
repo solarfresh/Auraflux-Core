@@ -1,5 +1,6 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class TripleItem(BaseModel):
@@ -30,3 +31,17 @@ class TripleItem(BaseModel):
         None,
         description="Boundary condition operator strictly chosen from ['<=', '>=', '==', '<', '>']"
     )
+
+    @field_validator("normalized_value", mode="before")
+    @classmethod
+    def parse_empty_float(cls, v):
+        if v == "" or v is None or v == "null":
+            return None
+        return float(v)
+
+    @field_validator("metric_name", "unit", "operator", mode="before")
+    @classmethod
+    def parse_empty_string(cls, v):
+        if v == "" or v == "null":
+            return None
+        return v

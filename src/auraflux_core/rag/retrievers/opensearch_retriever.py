@@ -11,24 +11,45 @@ from auraflux_core.rag.schemas.retrievers import (HybridQueryItem,
 
 class OpenSearchDSLBuilder:
     """Internal helper class translating OpenSearchHybridConfig into standard OpenSearch DSL."""
+
     MAX_HYBRID_QUERIES = 5
 
     @classmethod
     def _build_filter_clause(cls, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
         filter_clauses: List[Dict[str, Any]] = []
+        nested_group: Dict[str, List[Dict[str, Any]]] = {}
 
         for key, value in filters.items():
-            if not value:
+            if value is None:
                 continue
 
-            if isinstance(value, list):
-                filter_clauses.append({"terms": {key: value}})
-
-            elif isinstance(value, dict):
-                filter_clauses.append({"range": {key: value}})
-
+            if "." in key:
+                path = key.split(".")[0]
             else:
-                filter_clauses.append({"term": {key: value}})
+                path = None
+
+            # 建立單一條件句
+            if isinstance(value, list):
+                clause = {"terms": {key: value}}
+            elif isinstance(value, dict):
+                clause = {"range": {key: value}}
+            else:
+                clause = {"term": {key: value}}
+
+            if path:
+                if path not in nested_group:
+                    nested_group[path] = []
+                nested_group[path].append(clause)
+            else:
+                filter_clauses.append(clause)
+
+        for path, clauses in nested_group.items():
+            if len(clauses) == 1:
+                nested_query = clauses[0]
+            else:
+                nested_query = {"bool": {"must": clauses}}
+
+            filter_clauses.append({"nested": {"path": path, "query": nested_query}})
 
         return filter_clauses
 

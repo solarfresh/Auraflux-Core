@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from auraflux_core.core.agents.pipelines.plan_and_execute import \
     PlanAndExecuteHandler
@@ -24,12 +24,48 @@ class AlignmentHandler(PlanAndExecuteHandler):
             field = fallback
         return field.split("^")[0].strip()
 
+    def _extract_triple_filters(self, triples: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Translates normalized metric metadata in triples into OpenSearch filter clauses."""
+        filters: Dict[str, Any] = {}
+        if not triples or not isinstance(triples, list):
+            return filters
+
+        for t in triples:
+            if not isinstance(t, dict):
+                continue
+
+            metric_name = t.get("metric_name")
+            normalized_value = t.get("normalized_value")
+            unit = t.get("unit")
+            operator = t.get("operator", "<=")
+
+            if metric_name and normalized_value is not None:
+                filters["triples.metric_name"] = metric_name
+
+                if unit:
+                    filters["triples.unit"] = unit
+
+                val = float(normalized_value)
+                if operator == "<=":
+                    filters["triples.normalized_value"] = {"lte": val}
+                elif operator == ">=":
+                    filters["triples.normalized_value"] = {"gte": val}
+                elif operator == "<":
+                    filters["triples.normalized_value"] = {"lt": val}
+                elif operator == ">":
+                    filters["triples.normalized_value"] = {"gt": val}
+                elif operator == "==":
+                    filters["triples.normalized_value"] = val
+                break
+
+        return filters
+
     def _build_retriever_spec(self, payload: Dict[str, Any], plan_output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Shared logic for extracting hybrid_retriever tool specifications."""
         raw_queries = plan_output.get("queries", [])
         triples = plan_output.get("triples", [])
 
-        # Fallback to triples if queries are empty
+        # Fallback to triples text if queries are empty
         if not isinstance(raw_queries, list) or not raw_queries:
             if isinstance(triples, list) and triples:
                 t = triples[0]
@@ -64,7 +100,21 @@ class AlignmentHandler(PlanAndExecuteHandler):
         if not query_items:
             return None
 
-        tool_args = {"query_items": query_items, "top_k": plan_output.get("top_k", 5)}
+        merged_filters: Dict[str, Any] = {}
+        if payload.get("filters") and isinstance(payload["filters"], dict):
+            merged_filters.update(payload["filters"])
+
+        triple_filters = self._extract_triple_filters(triples)
+        merged_filters.update(triple_filters)
+
+        tool_args: Dict[str, Any] = {
+            "query_items": query_items,
+            "top_k": plan_output.get("top_k", 5)
+        }
+
+        if merged_filters:
+            tool_args["filters"] = merged_filters
+
         if payload.get("routing_key"):
             tool_args["routing"] = str(payload["routing_key"])
         if payload.get("index_name"):
