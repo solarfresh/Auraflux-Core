@@ -1,5 +1,8 @@
 from typing import Any, Dict, NamedTuple, Type, Union
 
+from auraflux_core.alignment.mental_model.agents import MentalModelAgent
+from auraflux_core.alignment.objective_claim.agents import ObjectiveClaimAgent
+from auraflux_core.alignment.threshold_claim.agents import ThresholdClaimAgent
 from auraflux_core.canvases.agents import (GraphSynthesistAgent,
                                            KnowledgeArchitect, OntologyAuditor)
 from auraflux_core.canvases.schemas import (GraphSynthesistAgentConfig,
@@ -9,6 +12,9 @@ from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.rag.agents.keywords_extractor import ExtractKeywordsAgent
 
 Agent = Union[
+    MentalModelAgent,
+    ObjectiveClaimAgent,
+    ThresholdClaimAgent,
     ExtractKeywordsAgent,
     # TODO: interfaces of BaseAgent were changed, so these agents are
     # TODO: temporarily disabled until they are updated to match
@@ -27,6 +33,20 @@ class AgentImplementation(NamedTuple):
 
 # Central Registry
 AGENT_REGISTRY: Dict[str, AgentImplementation] = {
+    # Alignment Agents
+    'MentalModelAgent': AgentImplementation(
+        agent_class=MentalModelAgent,
+        config_class=AgentConfig
+    ),
+    'ObjectiveClaimAgent': AgentImplementation(
+        agent_class=ObjectiveClaimAgent,
+        config_class=AgentConfig
+    ),
+    'ThresholdClaimAgent': AgentImplementation(
+        agent_class=ThresholdClaimAgent,
+        config_class=AgentConfig
+    ),
+    # RAG Agents
     'ExtractKeywordsAgent': AgentImplementation(
         agent_class=ExtractKeywordsAgent,
         config_class=AgentConfig

@@ -2,9 +2,9 @@ import json
 from typing import Any, Dict, List, Optional
 
 from auraflux_core.alignment.pipelines import AlignmentHandler
+from auraflux_core.alignment.schemas import TripleItem
 from auraflux_core.alignment.threshold_claim.schemas import (
-    NormalizedMetric, ThresholdClaimVerdict, ThresholdDiagnosticAnalysis,
-    TripleItem)
+    NormalizedMetric, ThresholdClaimVerdict, ThresholdDiagnosticAnalysis)
 from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.schemas.messages import Message
 

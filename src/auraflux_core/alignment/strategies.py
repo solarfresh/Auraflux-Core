@@ -9,7 +9,9 @@ from auraflux_core.core.orchestrators.strategies.base import \
     OrchestrationStrategy
 
 DEFAULT_AGENT_MAPPING = {
+    "mental_model": "MentalModelAgent",
     "objective_claim": "ObjectiveClaimAgent",
+    "threshold_claim": "ThresholdClaimAgent"
 }
 
 
