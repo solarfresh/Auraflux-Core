@@ -51,3 +51,43 @@ class ThresholdClaimVerdict(BaseModel):
         default=None,
         description="Detailed explanation of the numeric paradox or boundary overflow."
     )
+
+
+class ThresholdCalculatorInput(BaseModel):
+    """Input payload for threshold_calculator tool."""
+    claim_metrics: List[NormalizedMetric] = Field(
+        ...,
+        description="List of target metrics extracted from the user claim."
+    )
+    baseline_metrics: List[NormalizedMetric] = Field(
+        ...,
+        description="List of baseline metrics parsed from database/policy context."
+    )
+
+
+class MetricComparisonResult(BaseModel):
+    """Evaluation result for an individual metric comparison."""
+    metric_name: str = Field(..., description="Name of the evaluated metric.")
+    claimed_value: float = Field(..., description="Numeric value presented in the claim.")
+    baseline_value: Optional[float] = Field(None, description="Extracted baseline limit/threshold from policy.")
+    unit: str = Field(..., description="Unit of the metric.")
+    operator: str = Field(..., description="Comparison operator used (<=, >=, ==, <, >).")
+    is_satisfied: Optional[bool] = Field(None, description="True if within limits, False if violated, None if uncomparable.")
+    overflow_value: float = Field(0.0, description="Absolute variance or overflow amount if boundary violated.")
+    note: str = Field("", description="Detailed explanation of the calculation outcome.")
+
+
+class ThresholdCalculatorOutput(BaseModel):
+    """Output results produced by threshold_calculator tool."""
+    status: Literal["PASS", "FAIL", "PARADOX", "BORDERLINE"] = Field(
+        ...,
+        description="Overall deterministic calculation status."
+    )
+    comparisons: List[MetricComparisonResult] = Field(
+        default_factory=list,
+        description="Detailed comparison breakdown for each metric."
+    )
+    unprocessed_warnings: List[str] = Field(
+        default_factory=list,
+        description="Warnings regarding mismatched units or unparseable context values that require human/trade-off handling."
+    )

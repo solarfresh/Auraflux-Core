@@ -14,10 +14,10 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
     Specialized Alignment Agent for verifying quantitative thresholds and boundary claims (Gate 2/3).
 
     Acts as a Domain Provider:
-    1. Inherits infrastructure capabilities from BaseAgent (LLM generation, ToolExecutor)[cite: 2].
-    2. Inherits shared retrieval spec logic from BaseAlignmentHandler.
+    1. Inherits infrastructure capabilities from BaseAgent (LLM generation, ToolExecutor)[cite: 2, 8].
+    2. Inherits shared retrieval spec logic from BaseAlignmentHandler[cite: 8].
     3. Implements PlanAndExecuteHandler via BaseAlignmentHandler to execute a deterministic
-       two-stage workflow (RAG Retrieval -> Deterministic Calculator) without LLM hallucination.
+       two-stage workflow (RAG Retrieval -> Deterministic Calculator) without LLM hallucination[cite: 8].
     """
 
     def get_system_message_map(self) -> Dict[str, str]:
@@ -103,10 +103,10 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
     async def execute_tool_workflow(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any]
     ) -> List[Message]:
-        """Stage 2 Hook: Deterministic code-controlled execution pipeline (RAG -> Calculator)."""
+        """Stage 2 Hook: Code-controlled execution pipeline (RAG -> Calculator)[cite: 8]."""
         tool_results: List[Message] = []
 
-        # Step A: Execute hybrid_retriever to pull baseline policy/clause context
+        # Step A: Execute hybrid_retriever to pull baseline policy/clause context[cite: 8]
         retriever_spec = self._build_retriever_spec(payload, plan_output)
         if retriever_spec and self.tool_executor:
             rag_msg = await self.tool_executor.run(
@@ -115,20 +115,51 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
             )
             tool_results.append(rag_msg)
 
-        # Step B: Deterministic pass to threshold_calculator to eliminate LLM arithmetic errors
-        norm_metrics = plan_output.get("diagnostics", {}).get("quantification_requirements", [])
+        # Step B: Parse pre-normalized metrics from RAG tool output into standard NormalizedMetric objects
+        claim_metrics = plan_output.get("diagnostics", {}).get("quantification_requirements", [])
+        baseline_metrics = self._parse_baseline_metrics_from_rag(tool_results)
 
+        # Step C: Pass explicitly decoupled claim_metrics and baseline_metrics to threshold_calculator
         if self.tool_executor and "threshold_calculator" in self.tool_executor.tool_registry:
             calc_msg = await self.tool_executor.run(
                 tool_name="threshold_calculator",
                 tool_args={
-                    "normalized_metrics": norm_metrics,
-                    "retrieved_context": [m.content for m in tool_results]
+                    "claim_metrics": claim_metrics,
+                    "baseline_metrics": baseline_metrics
                 }
             )
             tool_results.append(calc_msg)
 
         return tool_results
+
+    def _parse_baseline_metrics_from_rag(self, tool_results: List[Message]) -> List[Dict[str, Any]]:
+        """Extracts normalized metrics directly attached to semantic triples from RAG context."""
+        extracted_metrics: List[Dict[str, Any]] = []
+
+        for msg in tool_results:
+            if msg.role != "tool":
+                continue
+
+            raw_content = msg.content
+            parsed_data = json.loads(raw_content) if isinstance(raw_content, str) else raw_content
+            items = parsed_data if isinstance(parsed_data, list) else [parsed_data]
+
+            for item in items:
+                content = item.get("content", item) if isinstance(item, dict) else {}
+                triples_list = content.get("triples", [])
+
+                for t in triples_list:
+                    if isinstance(t, dict) and t.get("metric_name") and t.get("normalized_value") is not None:
+                        raw_val = t.get("normalized_value")
+                        extracted_metrics.append({
+                            "raw_text": t.get("object", ""),
+                            "metric_name": t.get("metric_name"),
+                            "normalized_value": float(raw_val) if raw_val is not None else 0.0,
+                            "unit": t.get("unit", ""),
+                            "operator": t.get("operator", "<=")
+                        })
+
+        return extracted_metrics
 
     def build_synthesis_messages(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], tool_results: List[Message]
@@ -144,7 +175,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
             if msg.role != "tool":
                 continue
 
-            # Process calculator output separately if available
+            # Process calculator output separately if available[cite: 8]
             if "calculator" in msg.name.lower() or "overflow" in msg.content.lower():
                 calc_summary = msg.content
                 continue
@@ -209,7 +240,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
     def parse_final_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
     ) -> ThresholdClaimVerdict:
-        """Domain Transformation Hook: Maps Stage 1 & Stage 3 outputs into ThresholdClaimVerdict Schema."""
+        """Domain Transformation Hook: Maps Stage 1 & Stage 3 outputs into ThresholdClaimVerdict Schema[cite: 8]."""
         parsed_data = self.output_parser.parse_json(raw_llm_output)
 
         triples = [
@@ -218,7 +249,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
 
         diagnostics_data = plan_output.get("diagnostics", {})
 
-        # Ensure quantification_requirements matches List[NormalizedMetric]
+        # Ensure quantification_requirements matches List[NormalizedMetric][cite: 8]
         raw_metrics = diagnostics_data.get("quantification_requirements", [])
         normalized_metrics = [
             NormalizedMetric(**m) if isinstance(m, dict) else m for m in raw_metrics
@@ -270,7 +301,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
     ) -> ThresholdClaimVerdict:
         """
         Main execution facade for verifying a threshold/quantitative claim.
-        Delegates execution directly to the bound Pipeline strategy via agent.run()[cite: 2].
+        Delegates execution directly to the bound Pipeline strategy via agent.run()[cite: 2, 8].
         """
         payload: Dict[str, Any] = {
             "proposition_id": proposition_id,
@@ -283,5 +314,5 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
         if index_name is not None:
             payload["index_name"] = index_name
 
-        # Executes via BaseAgent.run(), which delegates directly to self.pipeline[cite: 2]
+        # Executes via BaseAgent.run(), which delegates directly to self.pipeline[cite: 2, 8]
         return await self.run(payload)
