@@ -5,6 +5,14 @@ from pydantic import BaseModel, Field
 from auraflux_core.alignment.schemas import TripleItem
 
 
+ThresholdStatus = Literal[
+    "VERIFIED",
+    "PARTIALLY_VERIFIED",
+    "VIOLATED",
+    "UNSUPPORTED",
+    "FAIL"
+]
+
 class NormalizedMetric(BaseModel):
     """Gate 2: Specific for quantitative threshold normalization."""
     raw_text: str = Field(..., description="Raw quantitative expression, e.g., '500萬TWD'")
@@ -39,13 +47,17 @@ class ThresholdClaimVerdict(BaseModel):
         description="Bound semantic triples (e.g. Budget -> <= -> 5000000 TWD)."
     )
     diagnostics: ThresholdDiagnosticAnalysis = Field(..., description="Orthogonal diagnostic analysis.")
-    status: Literal["PASS", "FAIL", "PARADOX", "BORDERLINE"] = Field(
+    status: ThresholdStatus = Field(
         ...,
         description="PASS: Met boundary; FAIL/PARADOX: Conflict/Out-of-bounds (BLOCK); BORDERLINE: Vague value."
     )
     preset_options: List[str] = Field(
         default_factory=list,
         description="Suggested human trade-off choices if BORDERLINE or PARADOX triggers a BLOCK."
+    )
+    verification_proofs: List[str] = Field(
+        default_factory=list,
+        description="Extracted proof points, citations, or references supporting the verdict."
     )
     compliance_gap: Optional[str] = Field(
         default=None,
@@ -79,7 +91,7 @@ class MetricComparisonResult(BaseModel):
 
 class ThresholdCalculatorOutput(BaseModel):
     """Output results produced by threshold_calculator tool."""
-    status: Literal["PASS", "FAIL", "PARADOX", "BORDERLINE"] = Field(
+    status: ThresholdStatus = Field(
         ...,
         description="Overall deterministic calculation status."
     )

@@ -95,7 +95,7 @@ class ThresholdCalculatorTool(BaseTool):
                 )
                 continue
 
-            # 3. 純粹 Python 確定性邏輯運算
+            # Pure Python deterministic boundary check
             satisfied, overflow, err_note = self._evaluate_boundary(
                 claimed_val=claim.normalized_value,
                 baseline_val=baseline.normalized_value,
@@ -120,14 +120,15 @@ class ThresholdCalculatorTool(BaseTool):
                 )
             )
 
-        if has_paradox:
-            status = "PARADOX"
+        # 全新的狀態對齊邏輯 (VERIFIED / VIOLATED / PARTIALLY_VERIFIED / UNSUPPORTED)
+        if len(claims) > 0 and len(baselines) == 0:
+            status = "UNSUPPORTED"
         elif has_failure:
-            status = "FAIL"
-        elif has_unprocessed:
-            status = "BORDERLINE"
+            status = "VIOLATED"
+        elif has_paradox or has_unprocessed:
+            status = "PARTIALLY_VERIFIED"
         else:
-            status = "PASS"
+            status = "VERIFIED"
 
         output = ThresholdCalculatorOutput(
             status=status,
