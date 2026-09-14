@@ -1,6 +1,7 @@
+import re
 from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 PremiseT = TypeVar("PremiseT")
 QuantT = TypeVar("QuantT")
@@ -18,13 +19,23 @@ ClaimStatus = Literal[
 class TripleItem(BaseModel):
     """
     Expresses a bound semantic triple: Subject -> Predicate -> Object,
-    optionally enriched with normalized quantitative metric metadata.
+    optionally enriched with normalized quantitative metric metadata and coreference resolution.
     Provides a closed-world statement ensuring entities, logical conditions, and quantities remain coupled.
     """
 
-    subject: str = Field(..., description="Subject entity")
-    predicate: str = Field(..., description="Relation / Predicate / Operator")
-    object: str = Field(..., description="Metric / Constraint / Object entity")
+    subject: str = Field(..., description="Subject entity as verbatim from text")
+    subject_resolved: Optional[str] = Field(
+        None,
+        description="Resolved actual entity name(s) if subject is a pronoun, relative pronoun, or generic term (e.g., 'C++ / Rust')"
+    )
+    predicate: str = Field(..., description="Relation / Predicate / Operator as verbatim from text")
+    object: str = Field(..., description="Metric / Constraint / Object entity as verbatim from text")
+
+    # Target field binding for metric (automatically resolved via post-processing)
+    data_target: Optional[str] = Field(
+        None,
+        description="Field that contains the raw quantitative text span: strictly 'subject' or 'object'"
+    )
 
     # Embedded Quantitative Metric Normalization Properties
     metric_name: Optional[str] = Field(
@@ -47,16 +58,56 @@ class TripleItem(BaseModel):
     @field_validator("normalized_value", mode="before")
     @classmethod
     def parse_empty_float(cls, v):
+        """Coerces empty strings, null literals, or None values into None for float type safety."""
         if v == "" or v is None or v == "null":
             return None
         return float(v)
 
-    @field_validator("metric_name", "unit", "operator", mode="before")
+    @field_validator("subject_resolved", "data_target", "metric_name", "unit", "operator", mode="before")
     @classmethod
     def parse_empty_string(cls, v):
+        """Coerces empty strings or null literals into None for string properties."""
         if v == "" or v == "null":
             return None
         return v
+
+    @model_validator(mode="after")
+    def auto_assign_data_target_fallback(self) -> "TripleItem":
+        """
+        Fallback Logic: If 'normalized_value' exists but LLM omitted 'data_target',
+        programmatically assign 'data_target' via deterministic string matching.
+        """
+        # Primary check: Only execute fallback if LLM omitted data_target
+        if self.normalized_value is not None and self.data_target is None:
+            # Format numeric string for substring matching (e.g., 10000.0 -> "10000")
+            val_str = str(self.normalized_value)
+            val_str_clean = val_str[:-2] if val_str.endswith(".0") else val_str
+
+            # Check literal occurrence of raw number or unit symbol within fields
+            in_object = val_str_clean in self.object or (
+                self.unit is not None and self.unit in self.object
+            )
+            in_subject = val_str_clean in self.subject or (
+                self.unit is not None and self.unit in self.subject
+            )
+
+            if in_object and not in_subject:
+                self.data_target = "object"
+            elif in_subject and not in_object:
+                self.data_target = "subject"
+            elif in_object and in_subject:
+                # Priority goes to object if numerical string exists in both
+                self.data_target = "object"
+            else:
+                # Fallback heuristic: Check for digits via Regex if metric units were transformed
+                if re.search(r"\d+", self.object):
+                    self.data_target = "object"
+                elif re.search(r"\d+", self.subject):
+                    self.data_target = "subject"
+                else:
+                    self.data_target = "object"
+
+        return self
 
 
 class ClaimVerdict(BaseModel):

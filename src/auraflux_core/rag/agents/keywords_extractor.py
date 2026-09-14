@@ -12,23 +12,32 @@ class ExtractKeywordsAgent(BaseAgent):
         return {
             "default": (
                 "You are an expert Information Extraction Agent specializing in Knowledge Graph construction, Metric Normalization, and Document Analysis.\n"
-                "Your task is to analyze the provided raw document chunk text and extract structured key information: Bound Semantic Triples (with embedded Metric Normalization) and Exact Keywords/Entities.\n\n"
+                "Your task is to analyze the provided raw document chunk text and extract structured key information: Bound Semantic Triples (with embedded Metric Normalization & Coreference Resolution) and Exact Keywords/Entities.\n\n"
                 "### EXTRACTION RULES\n\n"
                 "1. **Semantic Triples (`triples`)**:\n"
                 "   - Extract bound facts expressed as closed-world triples: `(subject, predicate, object)`.\n"
                 "   - **EXACT TEXT MATCH REQUIRED**: `subject`, `predicate`, and `object` MUST strictly use the exact phrasing, exact terms, and wording present in the source text. Do NOT paraphrase, summarize, or translate any of the words into synonyms.\n"
-                "   - `subject`: Core entity, concrete object, actor, or specific parameter name directly quoted from text. **NO PRONOUNS**: Do NOT use vague pronouns or general self-references (e.g., 'we', 'I', 'they', 'it', '我們', '這個') as the subject. If a subject lacks explicit technical meaning, skip the triple.\n"
+                "   - `subject`: Core entity, concrete object, actor, parameter name, or descriptive phrase directly quoted from text.\n"
+                "   - `subject_resolved`: (Coreference & Entity Resolution Rule)\n"
+                "     - Ask: \"Does the verbatim `subject` string explicitly contain the concrete product, system, proper noun, or entity name?\"\n"
+                "     - If NO (e.g., pronouns like 'Neither', 'It', or generic descriptive phrases like 'The most recent figure', 'The official benchmark', 'The company'), you MUST resolve and write the explicit entity name(s) here (e.g., 'Bun').\n"
+                "     - If YES (e.g., 'Bun v1.0', 'Rust compiler'), set to null.\n"
                 "   - `predicate`: The action, relation, logical condition, or operator connecting subject and object as verbatim from text.\n"
                 "   - `object`: Target entity, metric, quantitative limit, or constrained value directly quoted from text.\n"
                 "   - **FACTUAL RELATIONS ONLY**: Extract only explicit, concrete, operational, or logical relationships. Do NOT extract poetic metaphors, analogies, or rhetorical comparisons (e.g., skip statements like 'X is like Y learning to drive').\n"
                 "   - **Length Limit**: Keep `subject`, `predicate`, and `object` concise (under 10 words each). Do NOT insert entire sentences into a triple field.\n"
-                "   - **Quantitative Metrics Binding**: If the triple represents a measurable quantity, metric, limit, or threshold, you MUST attach the normalized metric properties (`metric_name`, `normalized_value`, `unit`, `operator`) directly to the triple.\n"
+                "   - **Quantitative Metrics Binding & Location (`data_target`)**:\n"
+                "     - Whenever `normalized_value` is extracted, you MUST set `data_target`.\n"
+                "     - **Location Matching Rule**: Indicate which field contains the raw quantitative text span from the source text:\n"
+                "       - Set `data_target: 'object'` if the raw numeric expression/quantity resides inside the `object` field.\n"
+                "       - Set `data_target: 'subject'` if the raw numeric expression/quantity resides inside the `subject` field.\n"
                 "   - **Multiple Quantitative Dimensions**: If a single statement expresses more than one distinct measurable quantity (e.g., a count AND a duration, a price AND a deadline), you MUST extract a SEPARATE triple for each quantity. Each triple's `object` must be the exact text span describing that single quantity only, and its `metric_name`/`normalized_value`/`unit`/`operator` must correspond to that same quantity — never let one triple's metric fields absorb a number that belongs to a different quantity in the same sentence.\n"
                 "     Example: \"Bun bundles 10,000 React components in 269ms.\" must produce TWO triples:\n"
-                "       1. (subject: \"Bun\", predicate: \"bundles\", object: \"10,000 React components\", metric_name: \"component_count\", normalized_value: 10000.0, unit: \"count\", operator: \"==\")\n"
-                "       2. (subject: \"Bun\", predicate: \"bundles ... in\", object: \"269ms\", metric_name: \"bundling_duration\", normalized_value: 0.269, unit: \"second\", operator: \"<=\")\n\n"
+                "       1. (subject: \"Bun\", subject_resolved: null, predicate: \"bundles\", object: \"10,000 React components\", data_target: \"object\", metric_name: \"component_count\", normalized_value: 10000.0, unit: \"count\", operator: \"==\")\n"
+                "       2. (subject: \"Bun\", subject_resolved: null, predicate: \"bundles ... in\", object: \"269ms\", data_target: \"object\", metric_name: \"bundling_duration\", normalized_value: 0.269, unit: \"second\", operator: \"<=\")\n\n"
                 "2. **Metric Normalization Principles (SI & Standard Base Units)**:\n"
                 "   When extracting optional normalized metric fields (`normalized_value` and `unit`), convert raw quantitative expressions into SI standard base units and full numeric scale:\n"
+                "   - **EXPLICIT NUMERIC VALUES ONLY**: Only extract `normalized_value` for concrete numeric expressions (e.g., \"2 million\" -> 2000000.0, \"500萬\" -> 5000000.0, \"$2.5K\" -> 2500.0). Do NOT normalize fuzzy or indefinite quantities (e.g., \"millions of\", \"thousands of\", \"several\", \"many\"); set `normalized_value`, `unit`, `operator`, and `data_target` to null for these fuzzy descriptions.\n"
                 "   - **Multipliers**: Expand all scale prefixes ('萬', '億', 'k', 'm', 'b') into full floating-point numbers (e.g., \"500萬\" -> 5000000.0; \"$2.5K\" -> 2500.0).\n"
                 "   - **Currency**: Normalize unit to standard ISO 4217 currency codes (e.g., 'TWD', 'USD', 'EUR', 'JPY').\n"
                 "   - **Time & Duration**: Convert long durations (weeks/months/years) strictly to **'day'** (1 week = 7, 1 month = 30, 1 year = 365). Convert short response/SLA times (minutes/hours) to **'hour'** or **'second'**.\n"
@@ -54,13 +63,15 @@ class ExtractKeywordsAgent(BaseAgent):
                 "### OUTPUT STRUCTURE SPECIFICATION\n\n"
                 "The output contains two primary fields:\n\n"
                 "* **`triples`**: A list of structured items capturing precise semantic relationships using verbatim text, enriched with normalized metrics when applicable.\n"
-                "  - `subject`: (String) Exact source entity or subject appearing in the text.\n"
+                "  - `subject`: (String) Exact source entity or phrase appearing in the text.\n"
+                "  - `subject_resolved`: (Optional String / Null) Explicit entity name if `subject` lacks the concrete proper noun/entity name. Set to null if `subject` already contains the explicit entity name.\n"
                 "  - `predicate`: (String) Exact linking operator or relationship phrase appearing in the text.\n"
                 "  - `object`: (String) Exact target entity or constraint value appearing in the text.\n"
-                "  - `metric_name`: (Optional String / Null) Standardized metric identifier representing the core semantic concept (e.g., 'budget', 'duration', 'sla_time', 'penalty', 'area'). Set to null if non-quantitative.\n"
-                "  - `normalized_value`: (Optional Float / Null) Pure numeric value converted strictly to the standard base unit. Set to null if non-quantitative.\n"
-                "  - `unit`: (Optional String / Null) Standard unit symbol (e.g., 'TWD', 'USD', 'day', 'hour', 'm2', 'kg', 'GB', '%'). Set to null if non-quantitative.\n"
-                "  - `operator`: (Optional String / Null) Boundary condition operator strictly chosen from ['<=', '>=', '==', '<', '>']. Defaults to '<=' for limits or limits of budget/time. Set to null if non-quantitative.\n"
+                "  - `data_target`: (Optional String / Null) Strictly choose from ['subject', 'object', null]. Must be set whenever `normalized_value` is present, indicating which field contains the raw quantitative text span.\n"
+                "  - `metric_name`: (Optional String / Null) Standardized metric identifier representing the core semantic concept (e.g., 'budget', 'duration', 'sla_time', 'penalty', 'area'). Set to null if non-quantitative or fuzzy.\n"
+                "  - `normalized_value`: (Optional Float / Null) Pure numeric value converted strictly to the standard base unit. Set to null if non-quantitative or fuzzy.\n"
+                "  - `unit`: (Optional String / Null) Standard unit symbol (e.g., 'TWD', 'USD', 'day', 'hour', 'm2', 'kg', 'GB', '%'). Set to null if non-quantitative or fuzzy.\n"
+                "  - `operator`: (Optional String / Null) Boundary condition operator strictly chosen from ['<=', '>=', '==', '<', '>']. Defaults to '<=' for limits or limits of budget/time. Set to null if non-quantitative or fuzzy.\n"
                 "* **`tags`**: (List of Strings) An unconstrained list of exact key terms, proper nouns, domain concepts, and technical entities extracted directly from the text as verbatim strings.\n"
             )
         }
@@ -92,8 +103,6 @@ class ExtractKeywordsAgent(BaseAgent):
         # Strip whitespace and specified punctuation marks from both ends
         cleaned = text.strip().strip(STRIP_CHARS).strip()
         return cleaned
-
-    # keywords_extractor.py
 
     def _split_enumerated_object(
         self,
