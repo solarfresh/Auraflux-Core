@@ -186,9 +186,50 @@ class SentencePatternCollection(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+import re
+from typing import List, Pattern
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class TripleCheckerPatternCollection(BaseModel):
+    """
+    Strongly-typed collection of compiled Regular Expressions for TripleRuleCheckerTool.
+    Supports CJK (Chinese, Japanese) and English pronoun, noise, and structural flaw detection.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    pronoun_pattern: Pattern = Field(
+        default=re.compile(
+            r"(?:"
+            # English Personal & Possessive Pronouns
+            r"\b(?:your|yours|you|my|mine|our|ours|us|their|theirs)\b|"
+            # CJK Personal & Possessive Pronouns
+            r"你[的們]?|我[的們]?|您[的]?|他[的們]?|她[的們]?|它[的們]?"
+            r")",
+            re.IGNORECASE
+        ),
+        description="Matches English and CJK personal and possessive pronouns inside predicates."
+    )
+
+    weak_predicate_pattern: Pattern = Field(
+        default=re.compile(
+            r"(?:"
+            # English Weak Verb Phrases
+            r"\b(?:gives?\s+\w+|provides?\s+\w+\s+with|helps?\s+\w+|allows?\s+\w+\s+to)\b|"
+            # CJK Weak Verb Phrases
+            r"提供[你您我他給]?|給予[你您我他給]?|讓[你您我他]|幫[你您我他]|為[你您我他]"
+            r")",
+            re.IGNORECASE
+        ),
+        description="Matches predicates containing weak verbs or embedded personal object fillers."
+    )
+
+
 # Default singleton instance for general usage
 DEFAULT_ANAPHORA_PATTERNS = AnaphoraPatternCollection()
 DEFAULT_KEYWORD_PATTERNS = KeywordPatternCollection()
 DEFAULT_HEADER_PATTERNS = HeaderPatternCollection()
 DEFAULT_NOISE_PATTERNS = NoisePatternCollection()
 DEFAULT_SENTENCE_PATTERNS = SentencePatternCollection()
+DEFAULT_TRIPLE_CHECKER_PATTERNS = TripleCheckerPatternCollection()

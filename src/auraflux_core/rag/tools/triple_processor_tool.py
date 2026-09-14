@@ -1,9 +1,11 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from auraflux_core.core.schemas.tools import ToolConfig
 from auraflux_core.core.tools.base_tool import BaseTool
-from auraflux_core.rag.config.regex_patterns import (DEFAULT_KEYWORD_PATTERNS,
-                                                     KeywordPatternCollection)
+from auraflux_core.rag.config.regex_patterns import (
+    DEFAULT_ANAPHORA_PATTERNS, DEFAULT_KEYWORD_PATTERNS,
+    DEFAULT_TRIPLE_CHECKER_PATTERNS, AnaphoraPatternCollection,
+    KeywordPatternCollection, TripleCheckerPatternCollection)
 
 
 class TripleProcessorTool(BaseTool):
@@ -169,6 +171,175 @@ class TripleProcessorTool(BaseTool):
                             "normalized_value": {"type": "number"},
                             "unit": {"type": "string"},
                             "operator": {"type": "string"}
+                        },
+                        "required": ["subject", "predicate", "object"]
+                    }
+                }
+            },
+            "required": ["triples"]
+        }
+
+
+class TripleRuleCheckerTool(BaseTool):
+    """
+    Tool for inspecting extracted knowledge graph semantic triples using lightweight regex rules,
+    filtering clean triples for ingestion and flagging flawed triples for reflection repair.
+    """
+
+    PREDICATE_MAX_WORDS = 6
+
+    def __init__(
+        self,
+        checker_patterns: TripleCheckerPatternCollection = DEFAULT_TRIPLE_CHECKER_PATTERNS,
+        anaphora_patterns: AnaphoraPatternCollection = DEFAULT_ANAPHORA_PATTERNS,
+        config: ToolConfig = ToolConfig()
+    ) -> None:
+        super().__init__(config=config)
+        self.checker_patterns = checker_patterns
+        self.anaphora_patterns = anaphora_patterns
+
+    async def run(
+        self,
+        triples: List[Dict[str, Any]],
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Executes rule inspection on triples.
+        Implements BaseTool.run() abstract method.
+        """
+        self.logger.info(f"Inspecting {len(triples)} semantic triples for rule violations.")
+        return self.inspect_triples(triples)
+
+    def inspect_triples(self, triples: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Orchestrates triple validation and splits them into clean and flagged sets.
+        """
+        clean_triples, flagged_triples = self.filter_triples(triples)
+        return {
+            "clean_triples": clean_triples,
+            "flagged_triples": flagged_triples,
+            "has_flagged": len(flagged_triples) > 0,
+            "total_count": len(triples),
+            "flagged_count": len(flagged_triples)
+        }
+
+    def inspect_single_triple(self, triple: Dict[str, Any]) -> List[str]:
+        """
+        Inspects a single triple against CJK/English validation rules.
+        Returns a list of error reasons if validation fails.
+        """
+        reasons: List[str] = []
+        predicate = str(triple.get("predicate", "") or "").strip()
+        subject = str(triple.get("subject", "") or "").strip()
+        obj = str(triple.get("object", "") or "").strip()
+
+        if not subject or not obj:
+            reasons.append("Subject or Object is empty.")
+            return reasons
+
+        if self.checker_patterns.pronoun_pattern.search(predicate):
+            reasons.append(
+                f"Predicate contains personal/possessive pronoun: '{predicate}'"
+            )
+
+        if self.checker_patterns.weak_predicate_pattern.search(predicate):
+            reasons.append(
+                f"Predicate uses a weak verb phrase with embedded object: '{predicate}'"
+            )
+
+        word_count = len(predicate.split())
+        if word_count > self.PREDICATE_MAX_WORDS:
+            reasons.append(
+                f"Predicate is too long ({word_count} words): '{predicate}'"
+            )
+
+        if self.anaphora_patterns.anaphora_reference_pattern.search(subject) and not triple.get("subject_resolved"):
+            reasons.append(
+                f"Subject contains unresolved anaphoric pronoun without subject_resolved: '{subject}'"
+            )
+
+        return reasons
+
+    def filter_triples(
+        self, triples: List[Dict[str, Any]]
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Splits triples into clean_triples and flagged_triples with reason annotations.
+        """
+        clean_triples: List[Dict[str, Any]] = []
+        flagged_triples: List[Dict[str, Any]] = []
+
+        for triple in triples:
+            reasons = self.inspect_single_triple(triple)
+            if reasons:
+                triple_copy = triple.copy()
+                triple_copy["_flag_reasons"] = reasons
+                flagged_triples.append(triple_copy)
+            else:
+                clean_triples.append(triple)
+
+        return clean_triples, flagged_triples
+
+    def get_name(self) -> str:
+        """Returns the unique tool identifier for LLM tool invocation."""
+        return "triple_rule_checker"
+
+    def get_description(self) -> str:
+        """Returns the function description used by LLMs to determine tool routing."""
+        return (
+            "Validates semantic triples against deterministic CJK and English syntax rules, "
+            "flagging triples containing pronouns, weak verb phrases, excessive length, or unresolved anaphora."
+        )
+
+    def get_parameters(self) -> Dict[str, Any]:
+        """Generates JSON Schema parameter specs fully aligned with TripleItem definition."""
+        return {
+            "type": "object",
+            "properties": {
+                "triples": {
+                    "type": "array",
+                    "description": "A list of bound semantic triple dictionaries containing entities, predicates, and metric metadata.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "subject": {
+                                "type": "string",
+                                "description": "Subject entity as verbatim from text."
+                            },
+                            "subject_resolved": {
+                                "type": ["string", "null"],
+                                "description": "Resolved actual entity name if subject is a pronoun/generic term."
+                            },
+                            "predicate": {
+                                "type": "string",
+                                "description": "Relation / Predicate / Operator verbatim from text."
+                            },
+                            "object": {
+                                "type": "string",
+                                "description": "Metric / Constraint / Object entity verbatim from text."
+                            },
+                            "data_target": {
+                                "type": ["string", "null"],
+                                "enum": ["subject", "object", None],
+                                "description": "Field that contains the raw quantitative text span."
+                            },
+                            "metric_name": {
+                                "type": ["string", "null"],
+                                "description": "Standardized metric identifier (e.g., 'budget', 'duration', 'sla_time')."
+                            },
+                            "normalized_value": {
+                                "type": ["number", "null"],
+                                "description": "Pure numeric value converted strictly to the standard base unit."
+                            },
+                            "unit": {
+                                "type": ["string", "null"],
+                                "description": "Standard unit symbol (e.g., 'TWD', 'USD', 'day', 'hour', 'GB', '%')."
+                            },
+                            "operator": {
+                                "type": ["string", "null"],
+                                "enum": ["<=", ">=", "==", "<", ">", None],
+                                "description": "Boundary condition operator."
+                            }
                         },
                         "required": ["subject", "predicate", "object"]
                     }
