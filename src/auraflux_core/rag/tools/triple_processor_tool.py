@@ -120,8 +120,10 @@ class TripleProcessorTool(BaseTool):
     ) -> Dict[str, Any]:
         triple_dict: Dict[str, Any] = {
             "subject": subj,
+            "subject_resolved": item.get("subject_resolved"),
             "predicate": pred,
-            "object": obj
+            "object": obj,
+            "data_target": item.get("data_target")
         }
 
         metric_name = item.get("metric_name")
