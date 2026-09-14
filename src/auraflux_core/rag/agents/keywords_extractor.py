@@ -1,8 +1,9 @@
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from auraflux_core.core.agents.base_agent import BaseAgent
-from auraflux_core.rag.config.regex_patterns import KeywordPatternCollection, DEFAULT_KEYWORD_PATTERNS
+from auraflux_core.rag.config.regex_patterns import (DEFAULT_KEYWORD_PATTERNS,
+                                                     KeywordPatternCollection)
 
 
 class ExtractKeywordsAgent(BaseAgent):
@@ -21,7 +22,11 @@ class ExtractKeywordsAgent(BaseAgent):
                 "   - `object`: Target entity, metric, quantitative limit, or constrained value directly quoted from text.\n"
                 "   - **FACTUAL RELATIONS ONLY**: Extract only explicit, concrete, operational, or logical relationships. Do NOT extract poetic metaphors, analogies, or rhetorical comparisons (e.g., skip statements like 'X is like Y learning to drive').\n"
                 "   - **Length Limit**: Keep `subject`, `predicate`, and `object` concise (under 10 words each). Do NOT insert entire sentences into a triple field.\n"
-                "   - **Quantitative Metrics Binding**: If the triple represents a measurable quantity, metric, limit, or threshold, you MUST attach the normalized metric properties (`metric_name`, `normalized_value`, `unit`, `operator`) directly to the triple.\n\n"
+                "   - **Quantitative Metrics Binding**: If the triple represents a measurable quantity, metric, limit, or threshold, you MUST attach the normalized metric properties (`metric_name`, `normalized_value`, `unit`, `operator`) directly to the triple.\n"
+                "   - **Multiple Quantitative Dimensions**: If a single statement expresses more than one distinct measurable quantity (e.g., a count AND a duration, a price AND a deadline), you MUST extract a SEPARATE triple for each quantity. Each triple's `object` must be the exact text span describing that single quantity only, and its `metric_name`/`normalized_value`/`unit`/`operator` must correspond to that same quantity — never let one triple's metric fields absorb a number that belongs to a different quantity in the same sentence.\n"
+                "     Example: \"Bun bundles 10,000 React components in 269ms.\" must produce TWO triples:\n"
+                "       1. (subject: \"Bun\", predicate: \"bundles\", object: \"10,000 React components\", metric_name: \"component_count\", normalized_value: 10000.0, unit: \"count\", operator: \"==\")\n"
+                "       2. (subject: \"Bun\", predicate: \"bundles ... in\", object: \"269ms\", metric_name: \"bundling_duration\", normalized_value: 0.269, unit: \"second\", operator: \"<=\")\n\n"
                 "2. **Metric Normalization Principles (SI & Standard Base Units)**:\n"
                 "   When extracting optional normalized metric fields (`normalized_value` and `unit`), convert raw quantitative expressions into SI standard base units and full numeric scale:\n"
                 "   - **Multipliers**: Expand all scale prefixes ('萬', '億', 'k', 'm', 'b') into full floating-point numbers (e.g., \"500萬\" -> 5000000.0; \"$2.5K\" -> 2500.0).\n"
@@ -88,13 +93,91 @@ class ExtractKeywordsAgent(BaseAgent):
         cleaned = text.strip().strip(STRIP_CHARS).strip()
         return cleaned
 
+    # keywords_extractor.py
+
+    def _split_enumerated_object(
+        self,
+        obj_raw: str,
+        patterns: KeywordPatternCollection
+    ) -> List[str]:
+        primary_delimiter_split_chunks = patterns.explicit_delimiter_splitter.split(obj_raw)
+
+        primary_split_objects = [
+            cleaned
+            for o in primary_delimiter_split_chunks
+            if (cleaned := self.clean_extracted_text(o))
+        ]
+
+        final_split_objects: List[str] = []
+        is_multi_item_enumeration = len(primary_split_objects) > 1
+
+        for chunk in primary_split_objects:
+            cleaned_chunk = self.clean_extracted_text(chunk)
+
+            if is_multi_item_enumeration and patterns.contextual_enumeration_splitter.search(cleaned_chunk):
+                secondary_chunks = patterns.contextual_enumeration_splitter.split(cleaned_chunk)
+                final_split_objects.extend([
+                    cleaned
+                    for sub in secondary_chunks
+                    if (cleaned := self.clean_extracted_text(sub))
+                ])
+            else:
+                final_split_objects.append(cleaned_chunk)
+
+        return final_split_objects
+
+    def _normalize_metric_value(self, raw_val: Any) -> Optional[float]:
+        """
+        Safely converts raw metric value to float.
+        Responsibility: Metric Normalization Only.
+        """
+        if raw_val is None:
+            return None
+        try:
+            return float(raw_val)
+        except (ValueError, TypeError):
+            return None
+
+    def _build_triple_dict(
+        self,
+        subj: str,
+        pred: str,
+        obj: str,
+        item: Dict[str, Any],
+        norm_val: Optional[float]
+    ) -> Dict[str, Any]:
+        """
+        Constructs the final dictionary representation of a single triple.
+        Responsibility: Schema / Dictionary Assembly Only.
+        """
+        triple_dict: Dict[str, Any] = {
+            "subject": subj,
+            "predicate": pred,
+            "object": obj
+        }
+
+        metric_name = item.get("metric_name")
+        unit = item.get("unit")
+        operator = item.get("operator", "<=")
+
+        if metric_name and norm_val is not None:
+            triple_dict.update({
+                "metric_name": str(metric_name),
+                "normalized_value": norm_val,
+                "unit": str(unit) if unit else "",
+                "operator": str(operator)
+            })
+
+        return triple_dict
+
     def process_triples(
         self,
         triples: List[Dict[str, Any]],
         patterns: KeywordPatternCollection = DEFAULT_KEYWORD_PATTERNS
     ) -> List[Dict[str, Any]]:
         """
-        Cleans triples, retains optional normalized metric fields, and splits enumerated objects.
+        Orchestrates triple processing: cleaning, object splitting, and metric formatting.
+        Responsibility: High-level Flow Orchestration.
         """
         processed_triples: List[Dict[str, Any]] = []
 
@@ -106,41 +189,17 @@ class ExtractKeywordsAgent(BaseAgent):
             if not (subj and pred and obj_raw):
                 continue
 
-            # Extract & sanitize normalized metric properties if present
-            metric_name = item.get("metric_name")
-            raw_val = item.get("normalized_value")
-            unit = item.get("unit")
-            operator = item.get("operator", "<=")
-
-            norm_val = None
-            if raw_val is not None:
-                try:
-                    norm_val = float(raw_val)
-                except (ValueError, TypeError):
-                    norm_val = None
-
-            split_objects = [
-                cleaned
-                for o in patterns.enumeration_splitter.split(obj_raw)
-                if (cleaned := self.clean_extracted_text(o))
-            ]
+            norm_val = self._normalize_metric_value(item.get("normalized_value"))
+            split_objects = self._split_enumerated_object(obj_raw, patterns)
 
             for single_obj in split_objects:
-                triple_dict: Dict[str, Any] = {
-                    "subject": subj,
-                    "predicate": pred,
-                    "object": single_obj
-                }
-
-                # Only append metric metadata if valid normalized_value exists
-                if metric_name and norm_val is not None:
-                    triple_dict.update({
-                        "metric_name": str(metric_name),
-                        "normalized_value": norm_val,
-                        "unit": str(unit) if unit else "",
-                        "operator": str(operator)
-                    })
-
+                triple_dict = self._build_triple_dict(
+                    subj=subj,
+                    pred=pred,
+                    obj=single_obj,
+                    item=item,
+                    norm_val=norm_val
+                )
                 processed_triples.append(triple_dict)
 
         return processed_triples

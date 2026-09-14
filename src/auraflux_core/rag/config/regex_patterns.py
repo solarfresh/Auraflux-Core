@@ -109,12 +109,40 @@ class HeaderPatternCollection(BaseModel):
 class KeywordPatternCollection(BaseModel):
     """
     Strongly-typed collection of compiled Regular Expressions for keyword and triple processing.
-    Handles enumeration delimiters (CJK and Western) and trailing punctuation stripping.
+    Handles enumeration delimiters (CJK and Western) via primary and secondary regex passes.
     """
-    # Pattern to match and split enumerated terms (commas, ideographic commas, 'and', 'as well as', Chinese '以及')
-    enumeration_splitter: Pattern = Field(
-        default=re.compile(r',|，|、|\s+and\s+|\s+as well as\s+|\s+以及\s+', re.IGNORECASE),
-        description="Splits enumerated terms into individual items using CJK and Western conjunctions/punctuation."
+    # Pass 1: Primary pattern for explicit punctuation, thousands separators, and English connectors
+    explicit_delimiter_splitter: re.Pattern = Field(
+        default=re.compile(
+            # 1. Punctuation followed by optional spaces and single-char Chinese connectors
+            # Strictly requires preceding punctuation (e.g., "、並", "、及", ",與", "；或")
+            r'[,，、;；]\s*(?:及|與|並|跟|或)|'
+
+            # 2. English conjunctions (consumes optional preceding comma and surrounding whitespace)
+            # Prevents duplicate splitting between a comma and 'and' which leaves empty string tokens
+            r'(?:[,，]\s*)?\s+(?:and|or|plus|along with|together with|as well as)\s+|'
+
+            # 3. Multi-character Chinese connectors
+            r'以及|暨|'
+
+            # 4. Standalone commas not acting as thousands separators
+            # Skips "1,000" while properly splitting commas in lists like "5, 10" and "A, 5,"
+            r'(?<!\d),(?!\d)|(?<=\d),(?!\d{3}(?!\d))|'
+
+            # 5. Standalone Chinese punctuation marks
+            r'[，、;；]',
+            re.IGNORECASE
+        ),
+        description="First-pass pattern splitting explicit CJK/Western punctuation and primary conjunctions."
+    )
+
+    # Pass 2: Secondary pattern for inline CJK verb/noun parallel phrase connectors (e.g., "成長並擴張")
+    contextual_enumeration_splitter: re.Pattern = Field(
+        default=re.compile(
+            # Matches "並" / "與" / "及" when positioned between two 2-char CJK terms
+            r"(?:(?<=[\u4e00-\u9fa5\w”」』】）\)])\s*(?:並|與|及|暨|跟)\s*(?=[\u4e00-\u9fa5\w“「『【（\(]))"
+        ),
+        description="Second-pass pattern targeting inline CJK connectors in parallel verb/noun phrases."
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
