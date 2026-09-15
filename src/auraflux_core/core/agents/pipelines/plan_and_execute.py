@@ -1,12 +1,18 @@
+import time
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
+import structlog
+
 from auraflux_core.core.agents.pipelines.base import (BaseAgentPipeline,
                                                       PipelineRegistry)
+from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.schemas.messages import Message
 
 if TYPE_CHECKING:
     from auraflux_core.core.agents.base_agent import BaseAgent
+
+logger = get_logger(__name__)
 
 
 class PlanAndExecuteHandler(ABC):
@@ -98,30 +104,41 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
     Supports dynamic hook detection for automatic stage bypassing.
     """
 
-    async def execute(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
+    async def _run_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
         if not isinstance(agent, PlanAndExecuteHandler):
+            logger.error(
+                "invalid_agent_interface",
+                expected_interface="PlanAndExecuteHandler",
+                actual_agent_class=agent.__class__.__name__,
+            )
             raise TypeError(f"Agent '{agent.name}' must implement PlanAndExecuteHandler interface.")
 
         # Stage 1: Initial Planning & Extraction
+        structlog.contextvars.bind_contextvars(stage_name="planning")
         plan_output = await self._execute_planning_stage(agent, payload)
 
         # Stage 1.5: Pre-Execution Validation & Reflection Loop
+        structlog.contextvars.bind_contextvars(stage_name="pre_execution_validation")
         refined_plan_output = await self._run_pre_execution_validation_loop(agent, payload, plan_output)
 
         # Stage 2: Code-Controlled Tool Execution Workflow
+        structlog.contextvars.bind_contextvars(stage_name="tool_workflow")
         tool_results = await self._execute_tool_workflow_stage(agent, payload, refined_plan_output)
 
         # Stage 3: Response Synthesis
+        structlog.contextvars.bind_contextvars(stage_name="synthesis")
         raw_synthesis_output = await self._execute_synthesis_stage(
             agent, payload, refined_plan_output, tool_results
         )
 
         # Stage 3.5: Post-Synthesis Verification
+        structlog.contextvars.bind_contextvars(stage_name="post_synthesis_verification")
         verified_synthesis_output = await self._verify_post_synthesis_boundary(
             agent, payload, raw_synthesis_output, tool_results
         )
 
         # Output Formatting
+        structlog.contextvars.bind_contextvars(stage_name="formatting")
         return agent.parse_final_output(payload, refined_plan_output, verified_synthesis_output)
 
     async def _execute_planning_stage(
@@ -130,59 +147,81 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         """
         Generates and parses the initial plan or extracted structured output.
         """
+        start_time = time.perf_counter()
+        logger.info("stage_started")
+
         handler = cast(PlanAndExecuteHandler, agent)
         plan_messages = handler.build_plan_messages(payload)
         plan_response = await agent.generate(plan_messages)
-        return agent.output_parser.parse_json(plan_response.content)
+        parsed_plan = agent.output_parser.parse_json(plan_response.content)
+
+        latency_sec = time.perf_counter() - start_time
+        logger.info("stage_completed", latency_sec=round(latency_sec, 4))
+        return parsed_plan
 
     async def _run_pre_execution_validation_loop(
         self, agent: "BaseAgent", payload: Dict[str, Any], initial_plan: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Executes an iterative inspection and reflection loop on the plan output.
-
-        No upfront probing call is made to detect whether refinement is implemented.
-        The loop's own control flow already covers every handler shape:
-          - Handler overrides nothing: inspect_plan_output defaults to is_valid=True,
-            loop exits on the first iteration with zero LLM calls.
-          - Handler overrides only inspect_plan_output (validate-but-not-repair):
-            build_plan_refinement_messages stays at its default (returns None), so a
-            failing validation records `validation_warnings` and stops immediately
-            instead of spinning through the remaining retries.
-          - Handler overrides both: full check -> reflect -> recheck loop, bounded by
-            max_refine_retries.
         """
+        start_time = time.perf_counter()
+        logger.info("stage_started")
+
         handler = cast(PlanAndExecuteHandler, agent)
         max_retries = payload.get("max_refine_retries", 1)
         current_plan = initial_plan
 
         for attempt in range(max_retries + 1):
             validation_result = await handler.inspect_plan_output(payload, current_plan)
+            is_valid = getattr(validation_result, "is_valid", True)
 
             # Stop Criteria 1: Passed deterministic validation
-            if getattr(validation_result, "is_valid", True):
+            if is_valid:
+                logger.info(
+                    "inspection_passed",
+                    attempt=attempt,
+                )
                 break
+
+            reasons = getattr(validation_result, "reasons", [])
+            logger.warning(
+                "inspection_failed",
+                attempt=attempt,
+                reasons=reasons,
+            )
 
             refinement_messages = handler.build_plan_refinement_messages(
                 payload, current_plan, validation_result
             )
 
-            # Stop Criteria 2: Handler has no repair path for this failure. Record and
-            # stop now rather than re-validating an unchanged plan for the remaining
-            # retries.
+            # Stop Criteria 2: Handler has no repair path
             if refinement_messages is None:
-                current_plan["validation_warnings"] = getattr(validation_result, "reasons", [])
+                logger.info(
+                    "refinement_halted",
+                    reason="no_repair_messages_provided",
+                    attempt=attempt,
+                )
+                current_plan["validation_warnings"] = reasons
                 break
 
-            # Stop Criteria 3: Maximum retries reached; log warnings and fallback
+            # Stop Criteria 3: Maximum retries reached
             if attempt >= max_retries:
-                current_plan["validation_warnings"] = getattr(validation_result, "reasons", [])
+                logger.warning(
+                    "refinement_halted",
+                    reason="max_retries_exceeded",
+                    max_retries=max_retries,
+                )
+                current_plan["validation_warnings"] = reasons
                 break
 
             # Generate Pass 2 reflection messages and execute repair
+            logger.info("refinement_attempt_started", attempt=attempt + 1)
             refinement_response = await agent.generate(refinement_messages)
             current_plan = agent.output_parser.parse_json(refinement_response.content)
 
+        latency_sec = time.perf_counter() - start_time
+        logger.info("stage_completed", latency_sec=round(latency_sec, 4))
         return current_plan
 
     async def _execute_tool_workflow_stage(
@@ -191,8 +230,19 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         """
         Executes code-controlled tools (e.g., database queries, calculators) deterministically.
         """
+        start_time = time.perf_counter()
+        logger.info("stage_started")
+
         handler = cast(PlanAndExecuteHandler, agent)
-        return await handler.execute_tool_workflow(payload, plan_output)
+        results = await handler.execute_tool_workflow(payload, plan_output)
+
+        latency_sec = time.perf_counter() - start_time
+        logger.info(
+            "stage_completed",
+            latency_sec=round(latency_sec, 4),
+            tool_results_count=len(results),
+        )
+        return results
 
     async def _execute_synthesis_stage(
         self,
@@ -204,9 +254,15 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         """
         Synthesizes tool execution results and plan output into a raw LLM response.
         """
+        start_time = time.perf_counter()
+        logger.info("stage_started")
+
         handler = cast(PlanAndExecuteHandler, agent)
         synth_messages = handler.build_synthesis_messages(payload, plan_output, tool_results)
         synth_response = await agent.generate(synth_messages)
+
+        latency_sec = time.perf_counter() - start_time
+        logger.info("stage_completed", latency_sec=round(latency_sec, 4))
         return synth_response.content
 
     async def _verify_post_synthesis_boundary(
@@ -220,8 +276,19 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         Runs post-synthesis verification checks against mathematical or policy constraints.
         Bypasses automatically if validate_synthesis_output is not implemented.
         """
+        start_time = time.perf_counter()
+        logger.info("stage_started")
+
         handler = cast(PlanAndExecuteHandler, agent)
         validated_synth = await handler.validate_synthesis_output(
             payload, raw_synthesis_output, tool_results
         )
-        return raw_synthesis_output if validated_synth is None else validated_synth
+
+        bypassed = validated_synth is None
+        latency_sec = time.perf_counter() - start_time
+        logger.info(
+            "stage_completed",
+            latency_sec=round(latency_sec, 4),
+            bypassed=bypassed,
+        )
+        return raw_synthesis_output if bypassed else validated_synth

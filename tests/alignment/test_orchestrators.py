@@ -37,7 +37,19 @@ async def test_orchestrator_execute_all_verified(orchestrator, mock_agent):
     verdict_1 = ObjectiveClaimVerdict(
         proposition_id="PROP-001",
         claim_text="Claim 1 statement",
-        triples=[TripleItem(subject="S1", predicate="P1", object="O1", metric_name="metric1", normalized_value=1.0, unit="unit1", operator="=")],
+        triples=[
+            TripleItem(
+                subject="S1",
+                predicate="P1",
+                object="O1",
+                metric_name="metric1",
+                normalized_value=1.0,
+                unit="unit1",
+                operator="=",
+                subject_resolved="True",
+                data_target="O1"
+            )
+        ],
         diagnostics=ObjectiveDiagnosticAnalysis(
             implicit_premises=[],
             quantification_requirements={},
@@ -48,7 +60,19 @@ async def test_orchestrator_execute_all_verified(orchestrator, mock_agent):
     verdict_2 = ObjectiveClaimVerdict(
         proposition_id="PROP-002",
         claim_text="Claim 2 statement",
-        triples=[TripleItem(subject="S2", predicate="P2", object="O2", metric_name="metric2", normalized_value=2.0, unit="unit2", operator="=")],
+        triples=[
+            TripleItem(
+                subject="S2",
+                predicate="P2",
+                object="O2",
+                metric_name="metric2",
+                normalized_value=2.0,
+                unit="unit2",
+                operator="=",
+                subject_resolved="true",
+                data_target="O2"
+            )
+        ],
         diagnostics=ObjectiveDiagnosticAnalysis(
             implicit_premises=[],
             quantification_requirements={},

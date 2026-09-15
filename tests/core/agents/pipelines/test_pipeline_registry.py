@@ -1,17 +1,7 @@
-from typing import Any, Dict
-
 import pytest
 
-from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.agents.pipelines.base import (BaseAgentPipeline,
                                                       PipelineRegistry)
-
-
-class DummyPipeline(BaseAgentPipeline):
-    """Dummy pipeline class for testing purposes."""
-
-    async def execute(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
-        return "dummy_result"
 
 
 @pytest.fixture(autouse=True)
@@ -22,39 +12,42 @@ def reset_pipeline_registry():
     PipelineRegistry._registry = original_registry
 
 
-def test_register_pipeline_success():
+def test_register_pipeline_success(dummy_pipeline):
     """Verify that a custom pipeline can be successfully registered into PipelineRegistry."""
+    pipeline_cls = dummy_pipeline.__class__
     pipeline_name = "test_dummy_pipeline"
 
     # Register using decorator
-    PipelineRegistry.register(pipeline_name)(DummyPipeline)
+    PipelineRegistry.register(pipeline_name)(pipeline_cls)
 
     assert pipeline_name in PipelineRegistry.list_registered()
     instance = PipelineRegistry.get(pipeline_name)
-    assert isinstance(instance, DummyPipeline)
+    assert isinstance(instance, pipeline_cls)
 
 
-def test_register_pipeline_duplicate_conflict():
+def test_register_pipeline_duplicate_conflict(dummy_pipeline):
     """Verify that registering a pipeline with a duplicate name raises a ValueError."""
+    pipeline_cls = dummy_pipeline.__class__
     pipeline_name = "test_duplicate_pipeline"
 
-    PipelineRegistry.register(pipeline_name)(DummyPipeline)
+    PipelineRegistry.register(pipeline_name)(pipeline_cls)
 
     with pytest.raises(ValueError) as exc_info:
-        PipelineRegistry.register(pipeline_name)(DummyPipeline)
+        PipelineRegistry.register(pipeline_name)(pipeline_cls)
 
     assert f"Pipeline registration conflict: Name '{pipeline_name}' is already registered" in str(exc_info.value)
 
 
-def test_get_registered_pipeline():
+def test_get_registered_pipeline(dummy_pipeline):
     """Verify that retrieving a registered pipeline returns an instantiated BaseAgentPipeline."""
+    pipeline_cls = dummy_pipeline.__class__
     pipeline_name = "test_instantiation_pipeline"
 
-    PipelineRegistry.register(pipeline_name)(DummyPipeline)
+    PipelineRegistry.register(pipeline_name)(pipeline_cls)
     instance = PipelineRegistry.get(pipeline_name)
 
     assert isinstance(instance, BaseAgentPipeline)
-    assert isinstance(instance, DummyPipeline)
+    assert isinstance(instance, pipeline_cls)
 
 
 def test_get_unregistered_pipeline_raises_key_error():
@@ -67,9 +60,10 @@ def test_get_unregistered_pipeline_raises_key_error():
     assert f"Pipeline strategy '{unregistered_name}' is not registered" in str(exc_info.value)
 
 
-def test_list_registered_returns_copy():
+def test_list_registered_returns_copy(dummy_pipeline):
     """Verify that list_registered returns a copy of internal registry to prevent unintended mutations."""
+    pipeline_cls = dummy_pipeline.__class__
     registered = PipelineRegistry.list_registered()
-    registered["fake_key"] = DummyPipeline
+    registered["fake_key"] = pipeline_cls
 
     assert "fake_key" not in PipelineRegistry._registry

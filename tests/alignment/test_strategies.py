@@ -124,7 +124,6 @@ async def test_alignment_orchestration_unmapped_claim_type_handling(
     mock_agent.diagnose_and_verify.assert_not_called()
     assert result_state.metadata["verdicts"] == []
     assert result_state.metadata["is_locked"] is True
-    assert (
-        "No agent configured/found for claim_type 'unknown_claim_type'"
-        in caplog.text
-    )
+
+    assert "unsupported_claim_type_skipped" in caplog.text
+    assert "unknown_claim_type" in caplog.text

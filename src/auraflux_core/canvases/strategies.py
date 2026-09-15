@@ -1,11 +1,14 @@
 import json
 from typing import Any, Dict
 
+from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.orchestrators.state import (OrchestratorState,
                                                     OrchestratorStatus)
 from auraflux_core.core.orchestrators.strategies.base import \
     OrchestrationStrategy
 from auraflux_core.core.schemas.messages import Message
+
+logger = get_logger(__name__)
 
 
 class AgenticStrategy(OrchestrationStrategy):
@@ -36,7 +39,12 @@ class AgenticStrategy(OrchestrationStrategy):
             # Initial User request with name 'User'
             unit_id = unit.get("source_id") or unit.get("id")
             state.current_unit_id = unit_id
-            self.logger.info(f"Processing Unit [{unit_id}]: Initiating knowledge extraction.")
+
+            logger.info(
+                "unit_processing_started",
+                unit_id=unit_id,
+                action="knowledge_extraction",
+            )
 
             messages = [
                 Message(role="user", content=f"Extract: {unit['content']}", name="User")
@@ -69,6 +77,12 @@ class AgenticStrategy(OrchestrationStrategy):
                 audit_res_json = json.loads(audit_res.content)
 
                 if valid_res.get("is_valid") and audit_res_json.get("is_valid"):
+                    logger.info(
+                        "unit_processing_completed",
+                        unit_id=unit_id,
+                        attempt=attempt,
+                        status="success",
+                    )
                     processed_results.append(output)
                     break
 
@@ -82,11 +96,25 @@ class AgenticStrategy(OrchestrationStrategy):
                     )
                     # We record the auditor's critique with its name
                     critique_combined = self.assemble_critique_combined(valid_res, audit_res)
-                    self.logger.info(critique_combined)
+
+                    logger.info(
+                        "refinement_critique_generated",
+                        unit_id=unit_id,
+                        attempt=attempt,
+                        is_valid_spec=valid_res.get("is_valid", False),
+                        is_valid_audit=audit_res_json.get("is_valid", False),
+                        critique_summary=critique_combined[:200] if critique_combined else "",
+                    )
+
                     messages.append(
                         Message(role="user", content=critique_combined, name=self.auditor_name)
                     )
                 else:
+                    logger.warning(
+                        "max_retries_exceeded_fallback",
+                        unit_id=unit_id,
+                        max_retries=self.max_retries,
+                    )
                     processed_results.append(output)
 
         state.output["raw_results"] = processed_results
@@ -110,14 +138,16 @@ class AgenticStrategy(OrchestrationStrategy):
 
         # 2. Structural Connectivity Diagnosis (Contextual Metrics)
         # Derived from isolation rates and hub analysis to guide graph density.
-        structural_report = auditor_message.metadata.get(
-            "diagnostic_conclusion",
-            "No diagnostic metrics provided."
-        )
+        structural_report = "No diagnostic metrics provided."
+        if auditor_message and getattr(auditor_message, "metadata", None):
+            structural_report = auditor_message.metadata.get(
+                "diagnostic_conclusion",
+                "No diagnostic metrics provided."
+            )
 
         # 3. Qualitative Expert Critique (Semantic Reasoning)
         # Contains detailed violation_details, structural_issues, and suggestions from the LLM.
-        expert_critique = auditor_message.content
+        expert_critique = auditor_message.content if auditor_message else ""
 
         # Assemble the final payload for the Architect's retry loop
         return (
@@ -169,7 +199,11 @@ class SequentialStrategy(OrchestrationStrategy):
             unit_id = unit.get("source_id") or unit.get("id")
             state.current_unit_id = unit_id
 
-            self.logger.info(f"Processing Unit [{unit_id}]: Initiating knowledge extraction.")
+            logger.info(
+                "unit_processing_started",
+                unit_id=unit_id,
+                action="knowledge_extraction",
+            )
 
             # Construct a single-turn message for the actor
             messages = [

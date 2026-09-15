@@ -3,8 +3,11 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.agents.pipelines.plan_and_execute import \
     PlanAndExecuteHandler
+from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.schemas.pipelines import ValidationResult
+
+logger = get_logger(__name__)
 
 
 class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
@@ -73,7 +76,14 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         formatter = getattr(self, "prompt_formatter", None)
         format_messages = getattr(formatter, "format_messages", None)
         if callable(format_messages):
-            return cast(List[Message], format_messages(payload))
+            try:
+                return cast(List[Message], format_messages(payload))
+            except Exception as e:
+                logger.warning(
+                    "formatter_execution_failed",
+                    formatter_class=formatter.__class__.__name__,
+                    error_msg=str(e),
+                )
 
         # --- Safe Fallback: User Prompt Only ---
         chunk_text = payload.get("chunk_text") or payload.get("text", "")
@@ -124,7 +134,12 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             return ValidationResult(is_valid=True, reasons=[])
 
         except Exception as e:
-            self.logger.error(f"Error in inspect_plan_output: {str(e)}")
+            logger.error(
+                "inspect_plan_output_failed",
+                error_type=type(e).__name__,
+                error_msg=str(e),
+                exc_info=True,
+            )
             return ValidationResult(
                 is_valid=False,
                 reasons=[f"Failed to post-process tags or triples: {str(e)}"]
@@ -138,7 +153,6 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         Constructs refinement messages specifically targeting flagged triples for Pass 2 repair.
         If no flagged triples exist, returns None to bypass Pass 2 execution.
         """
-        # Fixed Key: Updated from "_flagged_triples" to "flagged_triples" to match TripleRuleCheckerOutput schema
         flagged_triples = flawed_output.get("flagged_triples", [])
         if not flagged_triples:
             return None
@@ -239,21 +253,16 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             plan_output["_flagged_triples"] = flagged
 
             if has_flagged:
-                self.logger.warning(
-                    f"Incremental Inspection: Flagged {len(flagged)} flawed triples. "
-                    f"Total deduplicated clean triples: {len(accumulated_clean)}."
+                logger.warning(
+                    "incremental_triples_inspection_flagged",
+                    flagged_count=len(flagged),
+                    accumulated_clean_count=len(accumulated_clean),
                 )
 
         return has_flagged, all_reasons
 
     def _get_cleaner_function(self):
-        """Helper to safely resolve a clean_extracted_text callable from the tool registry or fallback.
-
-        Some registry entries may be BaseTool objects/classes without a typed
-        clean_extracted_text attribute. In that case, we must not try to access the
-        attribute directly, otherwise static type-checkers / language servers report
-        that the attribute is unknown on BaseTool.
-        """
+        """Helper to safely resolve a clean_extracted_text callable from the tool registry or fallback."""
         if self.tool_executor:
             processor_tool = self.tool_executor.tool_registry.get("triple_processor")
             clean_extractor = getattr(processor_tool, "clean_extracted_text", None)

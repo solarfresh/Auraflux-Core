@@ -1,9 +1,9 @@
 from enum import Enum
-
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, NonNegativeInt
 
+from auraflux_core.core.schemas.messages import PromptConfig
 from auraflux_core.core.tools.base_tool import BaseTool
 
 
@@ -21,9 +21,10 @@ class AgentConfig(BaseModel):
     provider: str
     model: str
     lang: str = 'en'
-    system_message: str | None = None
+
     output_format: Literal['TEXT', 'JSON'] = 'TEXT'
     pipeline_name: Literal['direct', 'plan_and_execute'] = 'direct'
+    prompt_config: Optional[PromptConfig] = None
 
     thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
 

@@ -20,6 +20,7 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
         mock_config = MagicMock()
         mock_config.name = "MockPlanAgent"
         mock_config.pipeline_name = "plan_and_execute"
+        mock_config.prompt_config = None
         mock_client_manager = MagicMock()
 
         super().__init__(config=mock_config, client_manager=mock_client_manager)
@@ -31,9 +32,6 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
     @property
     def name(self) -> str:
         return "MockPlanAgent"
-
-    def get_system_message_map(self):
-        return {"default": "System Prompt"}
 
     def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
         return [Message(role="user", content="Plan stage prompt", name=self.name)]
@@ -77,6 +75,7 @@ class MockAgentWithoutHandler(BaseAgent):
         mock_config = MagicMock()
         mock_config.name = "MockSimpleAgent"
         mock_config.pipeline_name = "direct"
+        mock_config.prompt_config = None
         mock_client_manager = MagicMock()
 
         super().__init__(config=mock_config, client_manager=mock_client_manager)
@@ -86,9 +85,6 @@ class MockAgentWithoutHandler(BaseAgent):
     @property
     def name(self) -> str:
         return "MockSimpleAgent"
-
-    def get_system_message_map(self):
-        return {"default": "System Prompt"}
 
 
 # =============================================================================

@@ -1,12 +1,15 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from auraflux_core.alignment.pipelines import AlignmentHandler
 from auraflux_core.alignment.schemas import TripleItem
 from auraflux_core.alignment.threshold_claim.schemas import (
     NormalizedMetric, ThresholdClaimVerdict, ThresholdDiagnosticAnalysis)
 from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.schemas.messages import Message
+
+logger = get_logger(__name__)
 
 
 class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
@@ -14,10 +17,10 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
     Specialized Alignment Agent for verifying quantitative thresholds and boundary claims (Gate 2/3).
 
     Acts as a Domain Provider:
-    1. Inherits infrastructure capabilities from BaseAgent (LLM generation, ToolExecutor).
-    2. Inherits shared retrieval spec logic from BaseAlignmentHandler.
+    1. Inherits infrastructure capabilities from BaseAgent (LLM generation, ToolExecutor)[cite: 12].
+    2. Inherits shared retrieval spec logic from BaseAlignmentHandler[cite: 12].
     3. Implements PlanAndExecuteHandler via BaseAlignmentHandler to execute a deterministic
-       two-stage workflow (RAG Retrieval -> Deterministic Calculator) without LLM hallucination.
+       two-stage workflow (RAG Retrieval -> Deterministic Calculator) without LLM hallucination[cite: 12].
     """
 
     def get_system_message_map(self) -> Dict[str, str]:
@@ -46,6 +49,19 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
 
     def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
         """Stage 1 Hook: Builds prompt to analyze threshold claim and extract quantitative requirements matching NormalizedMetric schema."""
+        formatter = getattr(self, "prompt_formatter", None)
+        format_messages = getattr(formatter, "format_messages", None)
+        if callable(format_messages):
+            try:
+                return cast(List[Message], format_messages(payload))
+            except Exception as e:
+                logger.warning(
+                    "prompt_formatter_failed",
+                    formatter_class=formatter.__class__.__name__,
+                    error_msg=str(e),
+                )
+
+        # --- Safe Fallback Prompt ---
         proposition_id = payload.get("proposition_id", "")
         claim_text = payload.get("claim_text", "")
 
@@ -178,52 +194,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
         proposition_id = payload.get("proposition_id", "")
         claim_text = payload.get("claim_text", "")
 
-        extracted_docs: List[str] = []
-        calc_summary: str = "No calculator result returned."
-
-        for msg in tool_results:
-            if msg.role != "tool":
-                continue
-
-            # Process calculator output separately if available
-            if "calculator" in msg.name.lower() or "overflow" in msg.content.lower():
-                calc_summary = msg.content
-                continue
-
-            raw_content = msg.content
-            if not raw_content:
-                continue
-
-            if isinstance(raw_content, str):
-                try:
-                    parsed_data = json.loads(raw_content)
-                except json.JSONDecodeError:
-                    parsed_data = [{"evidence_text": raw_content}]
-            else:
-                continue
-
-            if isinstance(parsed_data, dict):
-                retrieval_results = [parsed_data]
-            elif isinstance(parsed_data, list):
-                retrieval_results = parsed_data
-            else:
-                retrieval_results = []
-
-            for result in retrieval_results:
-                content = result.get('content', {})
-                if not isinstance(content, dict):
-                    continue
-
-                excerpt_text = content.get("evidence_text", "N/A")
-                location = content.get("location", "N/A")
-
-                doc_block = (
-                    f"• Source Location: {location}\n"
-                    f"• Baseline Policy Excerpt: \"{excerpt_text}\"\n"
-                )
-                extracted_docs.append(doc_block)
-
-        formatted_evidence_text = "\n".join(extracted_docs) if extracted_docs else "No relevant policy records found."
+        calc_summary, formatted_evidence_text = self._format_retrieved_evidence(tool_results)
 
         prompt = (
             f"Proposition ID: {proposition_id}\n"
@@ -292,7 +263,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
         elif status in ["VERIFIED", "PASS"]:
             compliance_gap = None
 
-        return ThresholdClaimVerdict(
+        verdict = ThresholdClaimVerdict(
             proposition_id=payload.get("proposition_id", ""),
             claim_text=payload.get("claim_text", ""),
             triples=triples,
@@ -302,6 +273,66 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
             compliance_gap=compliance_gap,
             verification_proofs=verification_proofs,
         )
+
+        logger.info(
+            "parse_final_output_completed",
+            proposition_id=verdict.proposition_id,
+            status=verdict.status,
+            has_compliance_gap=verdict.compliance_gap is not None,
+            preset_options_count=len(verdict.preset_options),
+        )
+
+        return verdict
+
+    def _format_retrieved_evidence(self, tool_results: List[Message]) -> tuple[str, str]:
+        """Helper to separate calculator output and format retrieved baseline policy context."""
+        extracted_docs: List[str] = []
+        calc_summary: str = "No calculator result returned."
+
+        for msg in tool_results:
+            if msg.role != "tool":
+                continue
+
+            # Process calculator output separately if available
+            if "calculator" in msg.name.lower() or "overflow" in msg.content.lower():
+                calc_summary = msg.content
+                continue
+
+            raw_content = msg.content
+            if not raw_content:
+                continue
+
+            if isinstance(raw_content, str):
+                try:
+                    parsed_data = json.loads(raw_content)
+                except json.JSONDecodeError:
+                    parsed_data = [{"evidence_text": raw_content}]
+            else:
+                continue
+
+            if isinstance(parsed_data, dict):
+                retrieval_results = [parsed_data]
+            elif isinstance(parsed_data, list):
+                retrieval_results = parsed_data
+            else:
+                retrieval_results = []
+
+            for result in retrieval_results:
+                content = result.get('content', {})
+                if not isinstance(content, dict):
+                    continue
+
+                excerpt_text = content.get("evidence_text", "N/A")
+                location = content.get("location", "N/A")
+
+                doc_block = (
+                    f"• Source Location: {location}\n"
+                    f"• Baseline Policy Excerpt: \"{excerpt_text}\"\n"
+                )
+                extracted_docs.append(doc_block)
+
+        formatted_evidence = "\n".join(extracted_docs) if extracted_docs else "No relevant policy records found."
+        return calc_summary, formatted_evidence
 
     # =========================================================================
     # Facade / Entrypoint
@@ -317,7 +348,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
     ) -> ThresholdClaimVerdict:
         """
         Main execution facade for verifying a threshold/quantitative claim.
-        Delegates execution directly to the bound Pipeline strategy via agent.run().
+        Delegates execution directly to the bound Pipeline strategy via agent.run()[cite: 12].
         """
         payload: Dict[str, Any] = {
             "proposition_id": proposition_id,
@@ -330,5 +361,5 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
         if index_name is not None:
             payload["index_name"] = index_name
 
-        # Executes via BaseAgent.run(), which delegates directly to self.pipeline
+        # Executes via BaseAgent.run(), which delegates directly to self.pipeline[cite: 12]
         return await self.run(payload)

@@ -1,13 +1,16 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from auraflux_core.alignment.mental_model.schemas import (
     FourDimensionAssumptionMatrix, MentalModelClaimVerdict,
     MentalModelDiagnosticAnalysis)
-from auraflux_core.alignment.schemas import TripleItem
 from auraflux_core.alignment.pipelines import AlignmentHandler
+from auraflux_core.alignment.schemas import TripleItem
 from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.schemas.messages import Message
+
+logger = get_logger(__name__)
 
 
 class MentalModelAgent(BaseAgent, AlignmentHandler):
@@ -58,6 +61,19 @@ class MentalModelAgent(BaseAgent, AlignmentHandler):
 
     def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
         """Stage 1 Hook: Builds prompt to analyze the expectation and specify targeted retrieval fields."""
+        formatter = getattr(self, "prompt_formatter", None)
+        format_messages = getattr(formatter, "format_messages", None)
+        if callable(format_messages):
+            try:
+                return cast(List[Message], format_messages(payload))
+            except Exception as e:
+                logger.warning(
+                    "prompt_formatter_failed",
+                    formatter_class=formatter.__class__.__name__,
+                    error_msg=str(e),
+                )
+
+        # --- Safe Fallback Prompt ---
         proposition_id = payload.get("proposition_id", "")
         claim_text = payload.get("claim_text", "")
 
@@ -126,15 +142,7 @@ class MentalModelAgent(BaseAgent, AlignmentHandler):
     async def execute_tool_workflow(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any]
     ) -> List[Message]:
-        """Stage 2 Hook: Deterministic execution of the retrieval tool workflow.
-
-        NOTE: Identical to ObjectiveClaimAgent's implementation — mental_model,
-        like objective_claim, is a pure retrieval consumer with no extra
-        rule-based calculation step (unlike threshold_claim_agent, which layers
-        a deterministic calculator on top of retrieval). If a third retrieval-only
-        agent is ever added, this method should be hoisted into a shared
-        RetrievalOnlyAlignmentHandler mixin instead of copy-pasted again.
-        """
+        """Stage 2 Hook: Deterministic execution of the retrieval tool workflow."""
         tool_results: List[Message] = []
         retriever_spec = self._build_retriever_spec(payload, plan_output)
 
@@ -154,62 +162,7 @@ class MentalModelAgent(BaseAgent, AlignmentHandler):
         proposition_id = payload.get("proposition_id", "")
         claim_text = payload.get("claim_text", "")
 
-        # NOTE: This extraction/formatting block is byte-for-byte identical to
-        # ObjectiveClaimAgent's version. It is agent-agnostic (pure retrieval-result
-        # formatting) and should be extracted into a shared
-        # AlignmentHandler.format_retrieved_evidence(tool_results) helper rather
-        # than duplicated a second time here.
-        extracted_docs: List[str] = []
-        tool_messages = [msg for msg in tool_results if msg.role == "tool"]
-
-        doc_idx = 1
-        for msg in tool_messages:
-            raw_content = msg.content
-            if isinstance(raw_content, str):
-                try:
-                    parsed_data = json.loads(raw_content)
-                except json.JSONDecodeError:
-                    parsed_data = [{"evidence_text": raw_content}]
-            else:
-                continue
-
-            if isinstance(parsed_data, dict):
-                retrieval_results = [parsed_data]
-            elif isinstance(parsed_data, list):
-                retrieval_results = parsed_data
-            else:
-                retrieval_results = []
-
-            for result in retrieval_results:
-                content = result.get('content', {})
-                if not isinstance(content, dict):
-                    continue
-
-                target_question = content.get("target_question", "N/A")
-                concept_title = content.get("concept_title", "N/A")
-                concept_desc = content.get("concept_description", "N/A")
-                triples = content.get("triples", [])
-
-                excerpt_text = content.get("evidence_text", "N/A")
-                location = content.get("location", "N/A")
-                tags = content.get("tags", [])
-
-                doc_block = (
-                    f"--- [Document #{doc_idx}] ---\n"
-                    f"• Source Location (Layer 4): {location}\n"
-                    f"• Tags: {', '.join(tags) if tags else 'None'}\n"
-                    f"• Target Question (Layer 1): {target_question}\n"
-                    f"• Concept Description (Layer 2): [{concept_title}] {concept_desc}\n"
-                    f"• Semantic Triples (Layer 3): {json.dumps(triples, ensure_ascii=False)}\n"
-                    f"• Direct Excerpt Proof (Layer 4): \"{excerpt_text}\"\n"
-                )
-                extracted_docs.append(doc_block)
-                doc_idx += 1
-
-        if extracted_docs:
-            formatted_evidence_text = "\n".join(extracted_docs)
-        else:
-            formatted_evidence_text = "No relevant context or records found in Core Context."
+        formatted_evidence_text = self._format_retrieved_evidence(tool_results)
 
         prompt = (
             f"Proposition ID: {proposition_id}\n"
@@ -301,7 +254,7 @@ class MentalModelAgent(BaseAgent, AlignmentHandler):
         elif status == "VERIFIED":
             compliance_gap = None
 
-        return MentalModelClaimVerdict(
+        verdict = MentalModelClaimVerdict(
             proposition_id=payload.get("proposition_id", ""),
             claim_text=payload.get("claim_text", ""),
             triples=triples,
@@ -310,6 +263,68 @@ class MentalModelAgent(BaseAgent, AlignmentHandler):
             verification_proofs=verification_proofs,
             compliance_gap=compliance_gap,
         )
+
+        logger.info(
+            "parse_final_output_completed",
+            proposition_id=verdict.proposition_id,
+            status=verdict.status,
+            has_compliance_gap=verdict.compliance_gap is not None,
+        )
+
+        return verdict
+
+    def _format_retrieved_evidence(self, tool_results: List[Message]) -> str:
+        """Helper to format structured 4-layer context documents from tool execution messages."""
+        extracted_docs: List[str] = []
+        tool_messages = [msg for msg in tool_results if msg.role == "tool"]
+
+        doc_idx = 1
+        for msg in tool_messages:
+            raw_content = msg.content
+            if isinstance(raw_content, str):
+                try:
+                    parsed_data = json.loads(raw_content)
+                except json.JSONDecodeError:
+                    parsed_data = [{"evidence_text": raw_content}]
+            else:
+                continue
+
+            if isinstance(parsed_data, dict):
+                retrieval_results = [parsed_data]
+            elif isinstance(parsed_data, list):
+                retrieval_results = parsed_data
+            else:
+                retrieval_results = []
+
+            for result in retrieval_results:
+                content = result.get('content', {})
+                if not isinstance(content, dict):
+                    continue
+
+                target_question = content.get("target_question", "N/A")
+                concept_title = content.get("concept_title", "N/A")
+                concept_desc = content.get("concept_description", "N/A")
+                triples = content.get("triples", [])
+
+                excerpt_text = content.get("evidence_text", "N/A")
+                location = content.get("location", "N/A")
+                tags = content.get("tags", [])
+
+                doc_block = (
+                    f"--- [Document #{doc_idx}] ---\n"
+                    f"• Source Location (Layer 4): {location}\n"
+                    f"• Tags: {', '.join(tags) if tags else 'None'}\n"
+                    f"• Target Question (Layer 1): {target_question}\n"
+                    f"• Concept Description (Layer 2): [{concept_title}] {concept_desc}\n"
+                    f"• Semantic Triples (Layer 3): {json.dumps(triples, ensure_ascii=False)}\n"
+                    f"• Direct Excerpt Proof (Layer 4): \"{excerpt_text}\"\n"
+                )
+                extracted_docs.append(doc_block)
+                doc_idx += 1
+
+        if extracted_docs:
+            return "\n".join(extracted_docs)
+        return "No relevant context or records found in Core Context."
 
     # =========================================================================
     # Facade / Entrypoint
