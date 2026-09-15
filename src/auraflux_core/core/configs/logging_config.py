@@ -13,7 +13,9 @@ def setup_logging(
     json_format: Optional[bool] = None,
 ) -> Any:
     """
-    Sets up structured logging for the application using structlog and standard logging.
+    Configures structured logging for the library.
+    Safe for interactive environments (e.g., Jupyter Notebooks) and non-intrusive
+    to parent application logging setups.
 
     Args:
         name (str): The logger name identifier. Defaults to 'auraflux'.
@@ -51,6 +53,7 @@ def setup_logging(
         # Development / Jupyter-friendly console pipeline
         renderer = structlog.dev.ConsoleRenderer(colors=True)
 
+    # 1. Configure global structlog settings
     structlog.configure(
         processors=shared_processors + [
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
@@ -60,7 +63,6 @@ def setup_logging(
         cache_logger_on_first_use=True,
     )
 
-    # Configure root standard library handler
     formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
         processors=[
@@ -69,16 +71,22 @@ def setup_logging(
         ],
     )
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
-
-    root_logger = logging.getLogger()
-    root_logger.addHandler(handler)
-    root_logger.setLevel(log_level)
-
-    # Disable propagation on named loggers to prevent duplicate output
+    # 2. Configure library-specific logger isolated from the root logger
     logger = logging.getLogger(name)
+    logger.setLevel(log_level)
+
+    # Prevent duplicate logging by disabling propagation to root logger
     logger.propagate = False
+
+    # 3. Idempotent Handler Registration: Prevent duplicate log output in Jupyter Notebooks
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    else:
+        # Update formatter on existing handlers if setup is re-executed
+        for h in logger.handlers:
+            h.setFormatter(formatter)
 
     return structlog.get_logger(name)
 
