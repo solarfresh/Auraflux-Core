@@ -159,3 +159,118 @@ async def test_tool_async_run_interface(checker_tool):
     assert result["flagged_count"] == 1
     assert len(result["clean_triples"]) == 1
     assert len(result["flagged_triples"]) == 1
+
+def test_anomaly_invalid_operator(checker_tool):
+    """Detects anomaly where operator contains unauthorized text (e.g., 'decrease') instead of valid enum symbols."""
+    flawed_triple = {
+        "subject": "memory use",
+        "predicate": "fell between",
+        "object": "13 and 48 percent",
+        "operator": "decrease",  # Invalid
+    }
+    reasons = checker_tool.inspect_single_triple(flawed_triple)
+    # Must fail if the rule checker doesn't catch it
+    assert len(reasons) > 0, "Expected rule checker to flag invalid operator, but none found."
+    assert any("operator" in r.lower() for r in reasons)
+
+
+def test_anomaly_missing_normalized_value_with_unit(checker_tool):
+    """Detects anomaly where a quantitative unit is present but normalized_value is improperly left null."""
+    flawed_triple = {
+        "subject": "memory use",
+        "predicate": "fell between",
+        "object": "13 and 48 percent",
+        "metric_name": "memory_usage",
+        "normalized_value": None,  # Invalid: unit is percent
+        "unit": "percent",
+    }
+    reasons = checker_tool.inspect_single_triple(flawed_triple)
+    # Must fail if the rule checker doesn't catch it
+    assert len(reasons) > 0, "Expected rule checker to flag missing normalized_value, but none found."
+    assert any("normalized_value" in r.lower() or "metric" in r.lower() for r in reasons)
+
+
+def test_anomaly_unnecessary_subject_resolved(checker_tool):
+    """Detects anomaly where subject_resolved is populated for a standard, non-anaphoric subject noun."""
+    flawed_triple = {
+        "subject": "memory use",
+        "subject_resolved": "memory_usage",  # Invalid: not an anaphoric pronoun
+        "predicate": "fell between",
+        "object": "13 and 48 percent",
+    }
+    reasons = checker_tool.inspect_single_triple(flawed_triple)
+    # Must fail if the rule checker doesn't catch it
+    assert len(reasons) > 0, "Expected rule checker to flag unnecessary subject_resolved, but none found."
+    assert any("subject_resolved" in r.lower() or "anaphora" in r.lower() for r in reasons)
+
+def test_clean_metric_all_or_none_passes(checker_tool):
+    """Verifies that both fields being present (or both being null) passes the consistency check cleanly."""
+    # Case A: Both present (valid metric)
+    valid_metric_triple = {
+        "subject": "CPU usage",
+        "predicate": "is",
+        "object": "85 percent",
+        "metric_name": "cpu_utilization",
+        "normalized_value": 85.0,
+        "unit": "percent",
+        "operator": "==",
+    }
+    assert len(checker_tool.inspect_single_triple(valid_metric_triple)) == 0
+
+    # Case B: Both null (valid non-metric triple)
+    valid_non_metric_triple = {
+        "subject": "Bun",
+        "predicate": "supports",
+        "object": "TypeScript",
+        "metric_name": None,
+        "normalized_value": None,
+        "unit": None,
+        "operator": None,
+    }
+    assert len(checker_tool.inspect_single_triple(valid_non_metric_triple)) == 0
+
+# ==============================================================================
+# 5. Metric Consistency Mixed/Partial None Test Cases (New)
+# ==============================================================================
+
+def test_clean_metric_partial_none_optional_fields(checker_tool):
+    """Verifies that optional fields (unit or operator) being None while core fields are present passes cleanly."""
+
+    # Case 1: unit and operator are both None (2 fields are None), but core metric is present -> Pass
+    triple_missing_unit_operator = {
+        "subject": "count",
+        "predicate": "equals",
+        "object": "50",
+        "metric_name": "item_count",
+        "normalized_value": 50.0,
+        "unit": None,      # None
+        "operator": None,  # None
+    }
+    assert len(checker_tool.inspect_single_triple(triple_missing_unit_operator)) == 0
+
+    # Case 2: operator is None (1 field is None), but metric_name, normalized_value, and unit are present -> Pass
+    triple_missing_operator = {
+        "subject": "temperature",
+        "predicate": "is",
+        "object": "25 degrees",
+        "metric_name": "ambient_temperature",
+        "normalized_value": 25.0,
+        "unit": "celsius",
+        "operator": None,  # None
+    }
+    assert len(checker_tool.inspect_single_triple(triple_missing_operator)) == 0
+
+def test_anomaly_orphan_unit_without_core_metric(checker_tool):
+    """Detects anomaly where a unit or operator is provided, but core metric fields (metric_name & normalized_value) are null."""
+    flawed_triple = {
+        "subject": "response time",
+        "predicate": "takes",
+        "object": "fast",
+        "metric_name": None,       # Missing core
+        "normalized_value": None,  # Missing core
+        "unit": "ms",              # Orphan unit!
+        "operator": None,
+    }
+    reasons = checker_tool.inspect_single_triple(flawed_triple)
+    assert len(reasons) > 0, "Expected rule checker to flag orphan unit/operator without core metric, but none found."
+    assert any("Inconsistent metric data" in r for r in reasons)

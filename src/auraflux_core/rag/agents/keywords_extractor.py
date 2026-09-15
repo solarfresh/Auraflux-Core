@@ -45,6 +45,7 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             "     - Set `data_target: 'object'` if the raw numeric expression/quantity resides inside the `object` field.\n"
             "     - Set `data_target: 'subject'` if the raw numeric expression/quantity resides inside the `subject` field.\n"
             "     - Set all metric fields (`data_target`, `metric_name`, `normalized_value`, `unit`, `operator`) to null if no quantitative scale is present.\n"
+            "     - **`operator` Strict Restriction**: If an operator or boundary condition applies, `operator` MUST strictly be one of the following comparison symbols: `\"<=\"`, `\">=\"`, `\"==\"`, `\"<\"`, `\">\"`, or `null`. **NEVER** use natural language words (e.g., do NOT use 'decrease', 'increase', 'between').\n"
             "   - **Multiple Quantitative Dimensions**: Extract SEPARATE triples for distinct measurable quantities.\n\n"
             "2. **Metric Normalization Principles (SI & Standard Base Units)**:\n"
             "   - Convert raw quantitative expressions into SI standard base units and full numeric scale (e.g., \"500萬\" -> 5000000.0).\n"

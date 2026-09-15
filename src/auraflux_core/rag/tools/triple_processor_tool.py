@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from pydantic import ValidationError
+
 from auraflux_core.core.schemas.tools import ToolConfig
 from auraflux_core.core.tools.base_tool import BaseTool
 from auraflux_core.rag.config.regex_patterns import (
@@ -203,7 +205,7 @@ class TripleRuleCheckerTool(BaseTool):
 
     async def run(
         self,
-        triples: List[Union[TripleItem, Dict[str, Any]]],
+        triples: List[Dict[str, Any]],
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -216,7 +218,7 @@ class TripleRuleCheckerTool(BaseTool):
         return inspection_result.model_dump(by_alias=True)
 
     def inspect_triples(
-        self, triples: List[Union[TripleItem, Dict[str, Any]]]
+        self, triples: List[Dict[str, Any]]
     ) -> TripleRuleCheckerOutput:
         """
         Orchestrates triple validation by delegating to filter_triples and
@@ -239,53 +241,115 @@ class TripleRuleCheckerTool(BaseTool):
             flagged_count=len(flagged_triples)
         )
 
-    def inspect_single_triple(
-        self, triple: Union[TripleItem, Dict[str, Any]]
-    ) -> List[str]:
+    def inspect_single_triple(self, triple: Dict[str, Any]) -> List[str]:
         """
-        Inspects a single triple against CJK/English validation rules.
-        Supports both TripleItem instances and raw dictionaries.
+        Inspects a single triple using a clean, modular validation pipeline.
         """
-        triple_dict = (
-            triple.model_dump(by_alias=True)
-            if isinstance(triple, TripleItem)
-            else triple
-        )
-
         reasons: List[str] = []
-        predicate = str(triple_dict.get("predicate", "") or "").strip()
-        subject = str(triple_dict.get("subject", "") or "").strip()
-        obj = str(triple_dict.get("object", "") or "").strip()
 
-        if not subject or not obj:
-            reasons.append("Subject or Object is empty.")
-            return reasons
+        # 1. Schema & Pydantic Parsing Gate
+        item = self._parse_and_validate_schema(triple, reasons)
+        if not item:
+            return reasons  # Stop early if schema/type validation fails
 
-        if self.checker_patterns.pronoun_pattern.search(predicate):
-            reasons.append(
-                f"Predicate contains personal/possessive pronoun: '{predicate}'"
-            )
-
-        if self.checker_patterns.weak_predicate_pattern.search(predicate):
-            reasons.append(
-                f"Predicate uses a weak verb phrase with embedded object: '{predicate}'"
-            )
-
-        word_count = len(predicate.split())
-        if word_count > self.PREDICATE_MAX_WORDS:
-            reasons.append(
-                f"Predicate is too long ({word_count} words): '{predicate}'"
-            )
-
-        if self.anaphora_patterns.anaphora_reference_pattern.search(subject) and not triple_dict.get("subject_resolved"):
-            reasons.append(
-                f"Subject contains unresolved anaphoric pronoun without subject_resolved: '{subject}'"
-            )
+        # 2. Execution Pipeline of Semantic Rules
+        reasons.extend(self._check_empty_nodes(item))
+        reasons.extend(self._check_predicate_rules(item))
+        reasons.extend(self._check_anaphora_rules(item))
+        reasons.extend(self._check_operator_rules(item))
+        reasons.extend(self._check_metric_rules(item))
 
         return reasons
 
+    # =========================================================================
+    # Modular Private Helper Validators
+    # =========================================================================
+
+    def _parse_and_validate_schema(self, triple: Dict[str, Any], reasons: List[str]) -> Optional[TripleItem]:
+        """Parses raw dict into TripleItem, capturing any Pydantic validation errors."""
+        try:
+            return TripleItem.model_validate(triple)
+        except ValidationError as e:
+            for error in e.errors():
+                loc = " -> ".join(str(x) for x in error["loc"])
+                reasons.append(f"Schema validation error at [{loc}]: {error['msg']}")
+            return None
+
+    def _check_empty_nodes(self, item: TripleItem) -> List[str]:
+        """Validates that subject and object are not empty."""
+        subject = str(item.subject or "").strip()
+        obj = str(item.object or "").strip()
+        if not subject or not obj:
+            return ["Subject or Object is empty."]
+        return []
+
+    def _check_predicate_rules(self, item: TripleItem) -> List[str]:
+        """Validates predicate constraints (pronouns, weak verbs, length limit)."""
+        reasons = []
+        predicate = str(item.predicate or "").strip()
+
+        if self.checker_patterns.pronoun_pattern.search(predicate):
+            reasons.append(f"Predicate contains personal/possessive pronoun: '{predicate}'")
+
+        if self.checker_patterns.weak_predicate_pattern.search(predicate):
+            reasons.append(f"Predicate uses a weak verb phrase with embedded object: '{predicate}'")
+
+        word_count = len(predicate.split())
+        if word_count > self.PREDICATE_MAX_WORDS:
+            reasons.append(f"Predicate is too long ({word_count} words): '{predicate}'")
+
+        return reasons
+
+    def _check_anaphora_rules(self, item: TripleItem) -> List[str]:
+        """Validates anaphora resolution rules and prevents unnecessary subject_resolved."""
+        subject = str(item.subject or "").strip()
+        is_anaphoric = bool(self.anaphora_patterns.anaphora_reference_pattern.search(subject))
+        has_resolved = item.subject_resolved is not None and str(item.subject_resolved).strip() != ""
+
+        if is_anaphoric and not has_resolved:
+            return [f"Subject contains unresolved anaphoric pronoun without subject_resolved: '{subject}'"]
+        elif not is_anaphoric and has_resolved:
+            return [f"Subject is not anaphora, but 'subject_resolved' is unnecessarily populated: '{item.subject_resolved}'"]
+        return []
+
+    def _check_operator_rules(self, item: TripleItem) -> List[str]:
+        """Validates operator whitelist restrictions."""
+        if item.operator is not None:
+            operator_str = str(item.operator).strip()
+            valid_operators = {"<=", ">=", "==", "<", ">"}
+            if operator_str and operator_str not in valid_operators:
+                return [f"Operator contains unauthorized value or invalid format: '{operator_str}'"]
+        return []
+
+    def _check_metric_rules(self, item: TripleItem) -> List[str]:
+        """Validates metric consistency (All-or-None core pairs and orphan field protections)."""
+        metric_name = item.metric_name
+        normalized_value = item.normalized_value
+        unit = item.unit
+        operator = item.operator
+
+        has_metric_name = metric_name is not None and str(metric_name).strip() != ""
+        has_norm_val = normalized_value is not None
+        has_unit = unit is not None and str(unit).strip() != ""
+        has_operator = operator is not None and str(operator).strip() != ""
+
+        has_any_metric_attribute = has_metric_name or has_norm_val or has_unit or has_operator
+
+        if has_any_metric_attribute:
+            if has_metric_name != has_norm_val:
+                return [
+                    f"Inconsistent metric data: 'metric_name' and 'normalized_value' must either both be specified "
+                    f"or both be null. (metric_name provided: {has_metric_name}, normalized_value provided: {has_norm_val})"
+                ]
+            elif not has_metric_name and not has_norm_val:
+                return [
+                    f"Inconsistent metric data: 'unit' or 'operator' is specified, but mandatory core metric fields "
+                    f"('metric_name' and 'normalized_value') are missing."
+                ]
+        return []
+
     def filter_triples(
-        self, triples: List[Union[TripleItem, Dict[str, Any]]]
+        self, triples: List[Dict[str, Any]]
     ) -> Tuple[List[TripleItem], List[FlaggedTripleItem]]:
         """
         Internal helper method to inspect and partition input triples into clean
@@ -295,22 +359,15 @@ class TripleRuleCheckerTool(BaseTool):
         flagged_triples: List[FlaggedTripleItem] = []
 
         for item in triples:
-            # 1. Safely extract dictionary using isinstance with explicit class
-            triple_dict: Dict[str, Any] = (
-                item.model_dump(by_alias=True)
-                if isinstance(item, TripleItem)
-                else item
-            )
-
             # 2. Inspect single triple
-            reasons = self.inspect_single_triple(triple_dict)
+            reasons = self.inspect_single_triple(item)
 
             if reasons:
                 # 3. Use model_validate to handle dictionary validation safely for Pylance
-                flagged_data = {**triple_dict, "_flag_reasons": reasons}
+                flagged_data = {**item, "_flag_reasons": reasons}
                 flagged_triples.append(FlaggedTripleItem.model_validate(flagged_data))
             else:
-                clean_triples.append(TripleItem.model_validate(triple_dict))
+                clean_triples.append(TripleItem.model_validate(item))
 
         return clean_triples, flagged_triples
 
