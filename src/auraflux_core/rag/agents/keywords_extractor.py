@@ -81,22 +81,14 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         self, payload: Dict[str, Any], plan_output: Dict[str, Any]
     ) -> ValidationResult:
         """
-        Stage 1.5 Inspection Hook: Clean tags and process triples.
-        Returns standard ValidationResult to ensure pipeline compatibility.
+        Stage 1.5 Inspection Hook:
+        Delegates incremental triple processing and cleans tags.
         """
         try:
             if "triples" in plan_output and isinstance(plan_output["triples"], list) and self.tool_executor:
-                processed_triples = await self.tool_executor.run(
-                    tool_name="triple_processor",
-                    tool_args={"triples": plan_output["triples"]}
-                )
+                await self._process_incremental_triples(plan_output)
 
-                plan_output["triples"] = (
-                    processed_triples.content
-                    if hasattr(processed_triples, "content")
-                    else processed_triples
-                )
-
+            # Clean tags
             if "tags" in plan_output and isinstance(plan_output["tags"], list):
                 clean_func = self._get_cleaner_function()
                 plan_output["tags"] = [
@@ -113,6 +105,71 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
                 is_valid=False,
                 reasons=[f"Failed to post-process tags or triples: {str(e)}"]
             )
+
+    async def _process_incremental_triples(self, plan_output: Dict[str, Any]) -> None:
+        """
+        Helper method dedicated to handling incremental triple processing and revision.
+        Cleans incoming triples, inspects rule violations, updates resolved fields by key,
+        and safely appends newly passed clean triples to the accumulated state.
+        """
+        raw_incoming_triples = plan_output.get("triples", [])
+
+        # Step 1: Clean and split enumerated objects via triple_processor
+        processed_res = await self.tool_executor.run(
+            tool_name="triple_processor",
+            tool_args={"triples": raw_incoming_triples}
+        )
+        processed_triples = (
+            processed_res.content
+            if hasattr(processed_res, "content")
+            else processed_res
+        )
+
+        # Step 2: Inspect candidate triples via triple_rule_checker
+        check_res = await self.tool_executor.run(
+            tool_name="triple_rule_checker",
+            tool_args={"triples": processed_triples}
+        )
+        check_data = (
+            check_res.content
+            if hasattr(check_res, "content")
+            else check_res
+        )
+
+        if isinstance(check_data, dict):
+            new_clean = check_data.get("clean_triples", [])
+            flagged = check_data.get("flagged_triples", [])
+
+            # Step 3: Deduplicate and update state using pure (subject, predicate, object) identity keys
+            accumulated_clean: List[Dict[str, Any]] = plan_output.get("_accumulated_clean_triples", [])
+
+            # Map triple key to list index for in-place updates
+            key_to_index = {
+                (t.get("subject"), t.get("predicate"), t.get("object")): idx
+                for idx, t in enumerate(accumulated_clean)
+            }
+
+            for item in new_clean:
+                key = (item.get("subject"), item.get("predicate"), item.get("object"))
+                if key in key_to_index:
+                    # If key exists, overwrite with the latest refined version (e.g., resolved subject_resolved)
+                    idx = key_to_index[key]
+                    accumulated_clean[idx] = item
+                else:
+                    # Append new unique triple and record index
+                    key_to_index[key] = len(accumulated_clean)
+                    accumulated_clean.append(item)
+
+            # Update internal accumulation state and write back to plan output
+            plan_output["_accumulated_clean_triples"] = accumulated_clean
+            plan_output["triples"] = accumulated_clean
+            plan_output["_flagged_triples"] = flagged
+
+            if check_data.get("has_flagged"):
+                self.logger.warning(
+                    f"Incremental Inspection: Flagged {len(flagged)} flawed triples. "
+                    f"Total deduplicated clean triples: {len(accumulated_clean)}."
+                )
 
     def _get_cleaner_function(self):
         """Helper to safely resolve a clean_extracted_text callable from the tool registry or fallback.
