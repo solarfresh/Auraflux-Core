@@ -93,7 +93,25 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             "Please analyze the following source text chunk and extract concise domain keywords (tags) "
             "and structured semantic triples (triples) according to the system extraction rules.\n\n"
             "### SOURCE TEXT CHUNK\n"
-            f"{chunk_text}"
+            f"{chunk_text}\n\n"
+            "### REQUIRED OUTPUT FORMAT (JSON)\n"
+            "Your output must strictly follow this exact JSON schema and structure:\n"
+            "{\n"
+            '  "triples": [\n'
+            "    {\n"
+            '      \"subject\": \"<exact text from chunk>\",\n'
+            '      \"subject_resolved\": \"<resolved entity name or null>\",\n'
+            '      \"predicate\": \"<action or relation verb>\",\n'
+            '      \"object\": \"<target entity or value>\",\n'
+            '      \"data_target\": \"<object / subject / null>\",\n'
+            '      \"metric_name\": \"<metric name or null>\",\n'
+            '      \"normalized_value\": <numeric value or null>,\n'
+            '      \"unit\": \"<unit string or null>\",\n'
+            '      \"operator\": \"<operator string or null>\"\n'
+            "    }\n"
+            "  ],\n"
+            '  "tags": ["<keyword_1>", "<keyword_2>"]\n'
+            "}"
         )
 
         return [
@@ -172,8 +190,24 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             "### REFINEMENT INSTRUCTIONS\n"
             "1. Fix each triple according to its specific `_flag_reasons`.\n"
             "2. Ensure `predicate` contains NO conversational pronouns (e.g., 'your', 'our') and NO hidden targets. Move target audiences/receivers to the `object` field.\n"
-            "3. Maintain strict adherence to system extraction rules.\n"
-            "4. Output a valid JSON object containing ONLY the corrected `triples` list."
+            "3. Maintain strict adherence to system extraction rules.\n\n"
+            "### REQUIRED OUTPUT FORMAT (JSON)\n"
+            "Your output must strictly follow this exact JSON schema containing ONLY the corrected triples list:\n"
+            "{\n"
+            '  "triples": [\n'
+            "    {\n"
+            '      \"subject\": \"<exact text from chunk>\",\n'
+            '      \"subject_resolved\": \"<resolved entity name or null>\",\n'
+            '      \"predicate\": \"<action or relation verb>\",\n'
+            '      \"object\": \"<target entity or value>\",\n'
+            '      \"data_target\": \"<object / subject / null>\",\n'
+            '      \"metric_name\": \"<metric name or null>\",\n'
+            '      \"normalized_value\": <numeric value or null>,\n'
+            '      \"unit\": \"<unit string or null>\",\n'
+            '      \"operator\": \"<operator string or null>\"\n'
+            "    }\n"
+            "  ]\n"
+            "}"
         )
 
         return [

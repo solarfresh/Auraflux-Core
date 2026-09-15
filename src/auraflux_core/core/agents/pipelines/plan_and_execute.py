@@ -133,9 +133,11 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
 
         # Stage 3.5: Post-Synthesis Verification
         structlog.contextvars.bind_contextvars(stage_name="post_synthesis_verification")
-        verified_synthesis_output = await self._verify_post_synthesis_boundary(
-            agent, payload, raw_synthesis_output, tool_results
-        )
+        verified_synthesis_output = raw_synthesis_output
+        if raw_synthesis_output and hasattr(self, "_verify_post_synthesis_boundary"):
+            verified_synthesis_output = await self._verify_post_synthesis_boundary(
+                agent, payload, raw_synthesis_output, tool_results
+            )
 
         # Output Formatting
         structlog.contextvars.bind_contextvars(stage_name="formatting")
@@ -259,6 +261,9 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
 
         handler = cast(PlanAndExecuteHandler, agent)
         synth_messages = handler.build_synthesis_messages(payload, plan_output, tool_results)
+        if not synth_messages:
+            return ""
+
         synth_response = await agent.generate(synth_messages)
 
         latency_sec = time.perf_counter() - start_time

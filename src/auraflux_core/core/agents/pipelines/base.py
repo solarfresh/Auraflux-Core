@@ -31,7 +31,6 @@ class BaseAgentPipeline(ABC):
         trace_id = payload.get("trace_id") or str(uuid.uuid4())
         pipeline_name = self.__class__.__name__
 
-        # 自動綁定全域 Pipeline Context，底層的所有 Log (如 BaseAgent/Handlers) 皆會自動帶入這些 key
         structlog.contextvars.bind_contextvars(
             trace_id=trace_id,
             agent_name=agent.name,
@@ -65,7 +64,6 @@ class BaseAgentPipeline(ABC):
             )
             raise e
         finally:
-            # 清理 ContextVars，防止 Context 污染後續請求
             structlog.contextvars.unbind_contextvars(
                 "trace_id", "agent_name", "pipeline_name", "stage_name"
             )
