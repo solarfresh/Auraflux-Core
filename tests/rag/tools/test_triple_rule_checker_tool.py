@@ -132,12 +132,12 @@ def test_filter_triples_splitting(checker_tool):
     clean, flagged = checker_tool.filter_triples(raw_triples)
 
     assert len(clean) == 1
-    assert clean[0]["subject"] == "Bun"
+    assert clean[0].subject == "Bun"
 
     assert len(flagged) == 1
-    assert flagged[0]["subject"] == "Cosmic"
-    assert "_flag_reasons" in flagged[0]
-    assert len(flagged[0]["_flag_reasons"]) > 0
+    assert flagged[0].subject == "Cosmic"
+    assert hasattr(flagged[0], "flag_reasons")
+    assert len(flagged[0].flag_reasons) > 0
 
 
 # ==============================================================================

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from auraflux_core.core.schemas.tools import ToolConfig
 from auraflux_core.core.tools.base_tool import BaseTool
@@ -6,6 +6,9 @@ from auraflux_core.rag.config.regex_patterns import (
     DEFAULT_ANAPHORA_PATTERNS, DEFAULT_KEYWORD_PATTERNS,
     DEFAULT_TRIPLE_CHECKER_PATTERNS, AnaphoraPatternCollection,
     KeywordPatternCollection, TripleCheckerPatternCollection)
+from auraflux_core.rag.schemas.chunker import TripleItem
+from auraflux_core.rag.schemas.triple_processors import (
+    FlaggedTripleItem, TripleRuleCheckerOutput)
 
 
 class TripleProcessorTool(BaseTool):
@@ -200,38 +203,59 @@ class TripleRuleCheckerTool(BaseTool):
 
     async def run(
         self,
-        triples: List[Dict[str, Any]],
+        triples: List[Union[TripleItem, Dict[str, Any]]],
         **kwargs
     ) -> Dict[str, Any]:
         """
         Executes rule inspection on triples.
-        Implements BaseTool.run() abstract method.
+        Implements BaseTool.run() abstract method and converts the internal
+        TripleRuleCheckerOutput Pydantic model into a JSON-serializable dictionary.
         """
         self.logger.info(f"Inspecting {len(triples)} semantic triples for rule violations.")
-        return self.inspect_triples(triples)
+        inspection_result: TripleRuleCheckerOutput = self.inspect_triples(triples)
+        return inspection_result.model_dump(by_alias=True)
 
-    def inspect_triples(self, triples: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def inspect_triples(
+        self, triples: List[Union[TripleItem, Dict[str, Any]]]
+    ) -> TripleRuleCheckerOutput:
         """
-        Orchestrates triple validation and splits them into clean and flagged sets.
+        Orchestrates triple validation by delegating to filter_triples and
+        returning a strongly-typed TripleRuleCheckerOutput model.
+
+        Args:
+            triples: A list of raw dictionary triples or TripleItem instances.
+
+        Returns:
+            TripleRuleCheckerOutput: Strongly-typed inspection result containing
+            clean triples, flagged triples, and execution metrics.
         """
         clean_triples, flagged_triples = self.filter_triples(triples)
-        return {
-            "clean_triples": clean_triples,
-            "flagged_triples": flagged_triples,
-            "has_flagged": len(flagged_triples) > 0,
-            "total_count": len(triples),
-            "flagged_count": len(flagged_triples)
-        }
 
-    def inspect_single_triple(self, triple: Dict[str, Any]) -> List[str]:
+        return TripleRuleCheckerOutput(
+            clean_triples=clean_triples,
+            flagged_triples=flagged_triples,
+            has_flagged=len(flagged_triples) > 0,
+            total_count=len(triples),
+            flagged_count=len(flagged_triples)
+        )
+
+    def inspect_single_triple(
+        self, triple: Union[TripleItem, Dict[str, Any]]
+    ) -> List[str]:
         """
         Inspects a single triple against CJK/English validation rules.
-        Returns a list of error reasons if validation fails.
+        Supports both TripleItem instances and raw dictionaries.
         """
+        triple_dict = (
+            triple.model_dump(by_alias=True)
+            if isinstance(triple, TripleItem)
+            else triple
+        )
+
         reasons: List[str] = []
-        predicate = str(triple.get("predicate", "") or "").strip()
-        subject = str(triple.get("subject", "") or "").strip()
-        obj = str(triple.get("object", "") or "").strip()
+        predicate = str(triple_dict.get("predicate", "") or "").strip()
+        subject = str(triple_dict.get("subject", "") or "").strip()
+        obj = str(triple_dict.get("object", "") or "").strip()
 
         if not subject or not obj:
             reasons.append("Subject or Object is empty.")
@@ -253,7 +277,7 @@ class TripleRuleCheckerTool(BaseTool):
                 f"Predicate is too long ({word_count} words): '{predicate}'"
             )
 
-        if self.anaphora_patterns.anaphora_reference_pattern.search(subject) and not triple.get("subject_resolved"):
+        if self.anaphora_patterns.anaphora_reference_pattern.search(subject) and not triple_dict.get("subject_resolved"):
             reasons.append(
                 f"Subject contains unresolved anaphoric pronoun without subject_resolved: '{subject}'"
             )
@@ -261,22 +285,32 @@ class TripleRuleCheckerTool(BaseTool):
         return reasons
 
     def filter_triples(
-        self, triples: List[Dict[str, Any]]
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        self, triples: List[Union[TripleItem, Dict[str, Any]]]
+    ) -> Tuple[List[TripleItem], List[FlaggedTripleItem]]:
         """
-        Splits triples into clean_triples and flagged_triples with reason annotations.
+        Internal helper method to inspect and partition input triples into clean
+        TripleItem instances and rule-violating FlaggedTripleItem instances.
         """
-        clean_triples: List[Dict[str, Any]] = []
-        flagged_triples: List[Dict[str, Any]] = []
+        clean_triples: List[TripleItem] = []
+        flagged_triples: List[FlaggedTripleItem] = []
 
-        for triple in triples:
-            reasons = self.inspect_single_triple(triple)
+        for item in triples:
+            # 1. Safely extract dictionary using isinstance with explicit class
+            triple_dict: Dict[str, Any] = (
+                item.model_dump(by_alias=True)
+                if isinstance(item, TripleItem)
+                else item
+            )
+
+            # 2. Inspect single triple
+            reasons = self.inspect_single_triple(triple_dict)
+
             if reasons:
-                triple_copy = triple.copy()
-                triple_copy["_flag_reasons"] = reasons
-                flagged_triples.append(triple_copy)
+                # 3. Use model_validate to handle dictionary validation safely for Pylance
+                flagged_data = {**triple_dict, "_flag_reasons": reasons}
+                flagged_triples.append(FlaggedTripleItem.model_validate(flagged_data))
             else:
-                clean_triples.append(triple)
+                clean_triples.append(TripleItem.model_validate(triple_dict))
 
         return clean_triples, flagged_triples
 
