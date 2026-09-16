@@ -234,31 +234,34 @@ def test_clean_metric_all_or_none_passes(checker_tool):
 # ==============================================================================
 
 def test_clean_metric_partial_none_optional_fields(checker_tool):
-    """Verifies that optional fields (unit or operator) being None while core fields are present passes cleanly."""
+    """Verifies that unit being None while core fields and operator are present passes cleanly."""
 
-    # Case 1: unit and operator are both None (2 fields are None), but core metric is present -> Pass
-    triple_missing_unit_operator = {
+    # Case 1: unit is None, but core metric and operator are present -> Pass
+    triple_missing_unit = {
         "subject": "count",
         "predicate": "equals",
         "object": "50",
         "metric_name": "item_count",
         "normalized_value": 50.0,
-        "unit": None,      # None
-        "operator": None,  # None
+        "unit": None,      # unit is optional (can be None)
+        "operator": "==",  # operator is mandatory when metric is present
     }
-    assert len(checker_tool.inspect_single_triple(triple_missing_unit_operator)) == 0
+    assert len(checker_tool.inspect_single_triple(triple_missing_unit)) == 0
 
-    # Case 2: operator is None (1 field is None), but metric_name, normalized_value, and unit are present -> Pass
-    triple_missing_operator = {
-        "subject": "temperature",
-        "predicate": "is",
-        "object": "25 degrees",
-        "metric_name": "ambient_temperature",
-        "normalized_value": 25.0,
-        "unit": "celsius",
-        "operator": None,  # None
+def test_anomaly_missing_operator_when_metric_present(checker_tool):
+    """Detects anomaly where metric data is present but operator is improperly left null/None."""
+    flawed_triple = {
+        "subject": "count",
+        "predicate": "equals",
+        "object": "50",
+        "metric_name": "item_count",
+        "normalized_value": 50.0,
+        "unit": None,
+        "operator": None,  # Invalid: operator is now mandatory
     }
-    assert len(checker_tool.inspect_single_triple(triple_missing_operator)) == 0
+    reasons = checker_tool.inspect_single_triple(flawed_triple)
+    assert len(reasons) > 0, "Expected rule checker to flag missing operator, but none found."
+    assert any("operator" in r.lower() for r in reasons)
 
 def test_anomaly_orphan_unit_without_core_metric(checker_tool):
     """Detects anomaly where a unit or operator is provided, but core metric fields (metric_name & normalized_value) are null."""

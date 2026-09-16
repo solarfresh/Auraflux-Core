@@ -302,17 +302,21 @@ class TripleRuleCheckerTool(BaseTool):
 
     def _check_anaphora_rules(self, item: TripleItem) -> List[str]:
         """
-        Validates anaphora resolution rules under Loose/Canonicalization Mode.
-        - Ensures anaphoric pronouns have 'subject_resolved'.
-        - Allows 'subject_resolved' for non-anaphoric entities to support canonicalization.
+        Validates anaphora resolution rules using regex patterns:
+        - If the subject is anaphoric/demonstrative (is_anaphoric = True), 'subject_resolved' is MANDATORY.
+        - If the subject is a standard noun (is_anaphoric = False), 'subject_resolved' should be null/absent.
         """
         subject = str(item.subject or "").strip()
         is_anaphoric = bool(self.anaphora_patterns.anaphora_reference_pattern.search(subject))
         has_resolved = item.subject_resolved is not None and str(item.subject_resolved).strip() != ""
 
-        # Only penalize if it's a pronoun but missing resolution
+        # Case 1: It's anaphoric (like "這項技術"), but missing required resolution
         if is_anaphoric and not has_resolved:
             return [f"Subject contains unresolved anaphoric pronoun without subject_resolved: '{subject}'"]
+
+        # Case 2: It's a standard non-anaphoric noun (like "memory use"), but has unnecessary resolution
+        if not is_anaphoric and has_resolved:
+            return [f"Unnecessary subject_resolved provided for non-anaphoric subject: '{subject}'"]
 
         return []
 
@@ -327,10 +331,13 @@ class TripleRuleCheckerTool(BaseTool):
 
     def _check_metric_rules(self, item: TripleItem) -> List[str]:
         """
-        [Strict Generalized Unit Mode] Validates metric consistency under the All-or-None rule.
-        Core triplet: (metric_name, normalized_value, unit) must EITHER all be present OR all be null.
-        Only 'operator' is allowed to be optional (null).
+        Validates metric consistency:
+        1. Core Metric (metric_name, normalized_value) MUST be All-or-None.
+        2. 'operator' is mandatory if metric data is present (forces prediction).
+        3. 'unit' is optional, but if present, follows validation.
         """
+        reasons: List[str] = []
+
         metric_name = item.metric_name
         normalized_value = item.normalized_value
         unit = item.unit
@@ -341,49 +348,94 @@ class TripleRuleCheckerTool(BaseTool):
         has_unit = unit is not None and str(unit).strip() != ""
         has_operator = operator is not None and str(operator).strip() != ""
 
-        # Presence states of the 3 mandatory core metric fields
-        core_states = [has_metric_name, has_norm_val, has_unit]
-
-        # All-or-None: Either all 3 are True, or all 3 are False
+        # 1. Core Metric All-or-None Check (metric_name & normalized_value)
+        core_states = [has_metric_name, has_norm_val]
         all_present = all(core_states)
         all_absent = not any(core_states)
 
         if not (all_present or all_absent):
-            return [
-                f"Inconsistent metric triplet: 'metric_name', 'normalized_value', and 'unit' must "
-                f"all be specified or all be null. "
-                f"(metric_name: {has_metric_name}, normalized_value: {has_norm_val}, unit: {has_unit})"
-            ]
+            reasons.append(
+                f"Inconsistent core metric: 'metric_name' and 'normalized_value' must "
+                f"both be specified or both be null."
+            )
+            return reasons
 
-        # Prevent orphan operator if core metric triplet is completely absent
-        if all_absent and has_operator:
-            return [
-                f"Inconsistent metric data: 'operator' is specified ('{operator}'), "
-                f"but mandatory core metric fields (metric_name, normalized_value, unit) are null."
-            ]
+        # 2. Orphan check: if core is absent, operator/unit should not be orphans
+        if all_absent:
+            if has_operator or has_unit:
+                reasons.append(
+                    f"Inconsistent metric data: 'operator' or 'unit' is specified, "
+                    f"but mandatory core metric fields (metric_name, normalized_value) are null."
+                )
+            return reasons
 
-        return []
+        # 3. Strict Operator Enforcement (Forces LLM to Predict Operator when metric is present)
+        if not has_operator:
+            reasons.append(
+                f"Missing operator: 'operator' cannot be null/blank when metric data is present. "
+                f"You MUST predict an operator (e.g., '==' for exact point values)."
+            )
+            return reasons
+
+        # 4. Operator Whitelist Check
+        valid_operators = {"<=", ">=", "==", "<", ">"}
+        operator_str = str(operator).strip()
+        if operator_str not in valid_operators:
+            reasons.append(
+                f"Invalid operator value: '{operator_str}'. Must be one of {valid_operators}."
+            )
+
+        return reasons
 
     def filter_triples(
         self, triples: List[Dict[str, Any]]
     ) -> Tuple[List[TripleItem], List[FlaggedTripleItem]]:
         """
         Internal helper method to inspect and partition input triples into clean
-        TripleItem instances and rule-violating FlaggedTripleItem instances.
+        TripleItem instances and rule-violating FlaggedTripleItem instances safely.
         """
         clean_triples: List[TripleItem] = []
         flagged_triples: List[FlaggedTripleItem] = []
 
         for item in triples:
-            # 2. Inspect single triple
             reasons = self.inspect_single_triple(item)
 
             if reasons:
-                # 3. Use model_validate to handle dictionary validation safely for Pylance
                 flagged_data = {**item, "_flag_reasons": reasons}
-                flagged_triples.append(FlaggedTripleItem.model_validate(flagged_data))
+                try:
+                    flagged_triples.append(FlaggedTripleItem.model_validate(flagged_data))
+                except ValidationError:
+                    # Fallback for severely corrupted data (e.g., object is None) to prevent tool crash
+                    safe_data = {
+                        "subject": item.get("subject") if isinstance(item.get("subject"), str) else str(item.get("subject") or ""),
+                        "predicate": item.get("predicate") if isinstance(item.get("predicate"), str) else str(item.get("predicate") or ""),
+                        "object": item.get("object") if isinstance(item.get("object"), str) else str(item.get("object") or ""),
+                        "subject_resolved": item.get("subject_resolved"),
+                        "data_target": item.get("data_target"),
+                        "metric_name": item.get("metric_name"),
+                        "normalized_value": item.get("normalized_value"),
+                        "unit": item.get("unit"),
+                        "operator": item.get("operator"),
+                        "_flag_reasons": reasons
+                    }
+                    flagged_triples.append(FlaggedTripleItem.model_construct(**safe_data))
             else:
-                clean_triples.append(TripleItem.model_validate(item))
+                try:
+                    clean_triples.append(TripleItem.model_validate(item))
+                except ValidationError as e:
+                    # Catch any unexpected pydantic validation error on clean path
+                    schema_reasons = [f"Schema validation error at [{ ' -> '.join(str(x) for x in err['loc']) }]: {err['msg']}" for err in e.errors()]
+                    flagged_data = {**item, "_flag_reasons": schema_reasons}
+                    try:
+                        flagged_triples.append(FlaggedTripleItem.model_validate(flagged_data))
+                    except ValidationError:
+                        safe_data = {
+                            "subject": str(item.get("subject") or ""),
+                            "predicate": str(item.get("predicate") or ""),
+                            "object": str(item.get("object") or ""),
+                            "_flag_reasons": schema_reasons
+                        }
+                        flagged_triples.append(FlaggedTripleItem.model_construct(**safe_data))
 
         return clean_triples, flagged_triples
 

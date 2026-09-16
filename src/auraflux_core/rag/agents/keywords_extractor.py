@@ -97,7 +97,8 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             "### SOURCE TEXT CHUNK\n"
             f"{chunk_text}\n\n"
             "### REQUIRED OUTPUT FORMAT (JSON)\n"
-            "Your output must strictly follow this exact JSON schema and structure:\n"
+            "CRITICAL: Your output MUST be a SINGLE JSON OBJECT containing two root keys: 'triples' and 'tags'. "
+            "DO NOT return a top-level JSON Array/List [].\n\n"
             "{\n"
             '  "triples": [\n'
             "    {\n"
@@ -194,7 +195,8 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             "2. Ensure `predicate` contains NO conversational pronouns (e.g., 'your', 'our') and NO hidden targets. Move target audiences/receivers to the `object` field.\n"
             "3. Maintain strict adherence to system extraction rules.\n\n"
             "### REQUIRED OUTPUT FORMAT (JSON)\n"
-            "Your output must strictly follow this exact JSON schema containing ONLY the corrected triples list:\n"
+            "CRITICAL: Your output MUST be a SINGLE JSON OBJECT containing two root keys: 'triples' and 'tags'. "
+            "DO NOT return a top-level JSON Array/List [].\n\n"
             "{\n"
             '  "triples": [\n'
             "    {\n"
