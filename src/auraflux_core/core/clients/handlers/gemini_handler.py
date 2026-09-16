@@ -261,6 +261,16 @@ class GeminiHandler(BaseHandler):
                 else None
             )
 
+        response_mime_type = None
+        response_schema = None
+        if request.output_format:
+            if (
+                isinstance(request.output_format, str)
+                and request.output_format == "JSON"
+            ):
+                response_mime_type = "application/json"
+                response_schema = request.output_schema
+
         return types.GenerateContentConfig(
             system_instruction=request.system_message,
             max_output_tokens=request.max_tokens,
@@ -269,4 +279,6 @@ class GeminiHandler(BaseHandler):
             thinking_config=thinking_config,
             tools=tools,
             tool_config=tool_config,
+            response_mime_type=response_mime_type,
+            response_schema=response_schema,
         )

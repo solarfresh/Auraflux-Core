@@ -301,15 +301,19 @@ class TripleRuleCheckerTool(BaseTool):
         return reasons
 
     def _check_anaphora_rules(self, item: TripleItem) -> List[str]:
-        """Validates anaphora resolution rules and prevents unnecessary subject_resolved."""
+        """
+        Validates anaphora resolution rules under Loose/Canonicalization Mode.
+        - Ensures anaphoric pronouns have 'subject_resolved'.
+        - Allows 'subject_resolved' for non-anaphoric entities to support canonicalization.
+        """
         subject = str(item.subject or "").strip()
         is_anaphoric = bool(self.anaphora_patterns.anaphora_reference_pattern.search(subject))
         has_resolved = item.subject_resolved is not None and str(item.subject_resolved).strip() != ""
 
+        # Only penalize if it's a pronoun but missing resolution
         if is_anaphoric and not has_resolved:
             return [f"Subject contains unresolved anaphoric pronoun without subject_resolved: '{subject}'"]
-        elif not is_anaphoric and has_resolved:
-            return [f"Subject is not anaphora, but 'subject_resolved' is unnecessarily populated: '{item.subject_resolved}'"]
+
         return []
 
     def _check_operator_rules(self, item: TripleItem) -> List[str]:
@@ -322,7 +326,11 @@ class TripleRuleCheckerTool(BaseTool):
         return []
 
     def _check_metric_rules(self, item: TripleItem) -> List[str]:
-        """Validates metric consistency (All-or-None core pairs and orphan field protections)."""
+        """
+        [Strict Generalized Unit Mode] Validates metric consistency under the All-or-None rule.
+        Core triplet: (metric_name, normalized_value, unit) must EITHER all be present OR all be null.
+        Only 'operator' is allowed to be optional (null).
+        """
         metric_name = item.metric_name
         normalized_value = item.normalized_value
         unit = item.unit
@@ -333,19 +341,27 @@ class TripleRuleCheckerTool(BaseTool):
         has_unit = unit is not None and str(unit).strip() != ""
         has_operator = operator is not None and str(operator).strip() != ""
 
-        has_any_metric_attribute = has_metric_name or has_norm_val or has_unit or has_operator
+        # Presence states of the 3 mandatory core metric fields
+        core_states = [has_metric_name, has_norm_val, has_unit]
 
-        if has_any_metric_attribute:
-            if has_metric_name != has_norm_val:
-                return [
-                    f"Inconsistent metric data: 'metric_name' and 'normalized_value' must either both be specified "
-                    f"or both be null. (metric_name provided: {has_metric_name}, normalized_value provided: {has_norm_val})"
-                ]
-            elif not has_metric_name and not has_norm_val:
-                return [
-                    f"Inconsistent metric data: 'unit' or 'operator' is specified, but mandatory core metric fields "
-                    f"('metric_name' and 'normalized_value') are missing."
-                ]
+        # All-or-None: Either all 3 are True, or all 3 are False
+        all_present = all(core_states)
+        all_absent = not any(core_states)
+
+        if not (all_present or all_absent):
+            return [
+                f"Inconsistent metric triplet: 'metric_name', 'normalized_value', and 'unit' must "
+                f"all be specified or all be null. "
+                f"(metric_name: {has_metric_name}, normalized_value: {has_norm_val}, unit: {has_unit})"
+            ]
+
+        # Prevent orphan operator if core metric triplet is completely absent
+        if all_absent and has_operator:
+            return [
+                f"Inconsistent metric data: 'operator' is specified ('{operator}'), "
+                f"but mandatory core metric fields (metric_name, normalized_value, unit) are null."
+            ]
+
         return []
 
     def filter_triples(

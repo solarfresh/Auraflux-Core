@@ -82,6 +82,8 @@ class BaseAgent(ABC):
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
                 thinking_level=self.config.thinking_level,
+                output_format=self.config.output_format,
+                output_schema=self.config.output_schema
             )
 
             logger.debug(
