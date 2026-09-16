@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List, Optional, Tuple, cast
 
 from auraflux_core.core.agents.base_agent import BaseAgent
@@ -245,11 +246,18 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             tool_name="triple_rule_checker",
             tool_args={"triples": processed_triples}
         )
-        check_data = (
-            check_res.content
-            if hasattr(check_res, "content")
-            else check_res
-        )
+
+        raw_content = getattr(check_res, "content", check_res)
+        if isinstance(raw_content, str):
+            try:
+                check_data = json.loads(raw_content)
+            except json.JSONDecodeError:
+                logger.error("failed_to_parse_tool_response_json", raw_content=raw_content)
+                check_data = {}
+        elif isinstance(raw_content, dict):
+            check_data = raw_content
+        else:
+            check_data = {}
 
         has_flagged = False
         all_reasons: List[str] = []
@@ -284,11 +292,18 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
                 reasons = f_item.get("_flag_reasons", [])
                 if isinstance(reasons, list):
                     all_reasons.extend(reasons)
+                elif isinstance(reasons, str):
+                    all_reasons.append(reasons)
 
             # Update internal accumulation state and write back to plan output
             plan_output["_accumulated_clean_triples"] = accumulated_clean
-            plan_output["triples"] = accumulated_clean
+            plan_output["clean_triples"] = accumulated_clean
+
+            plan_output["flagged_triples"] = flagged
             plan_output["_flagged_triples"] = flagged
+            plan_output["flagged_reasons"] = all_reasons
+
+            plan_output["triples"] = accumulated_clean + flagged
 
             if has_flagged:
                 logger.warning(
