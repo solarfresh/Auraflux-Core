@@ -191,7 +191,7 @@ def test_anomaly_missing_normalized_value_with_unit(checker_tool):
 
 
 def test_anomaly_unnecessary_subject_resolved(checker_tool):
-    """Detects anomaly where subject_resolved is populated for a standard, non-anaphoric subject noun."""
+    """Detects anomaly where subject_resolved is improperly populated for a standard non-anaphoric subject noun."""
     flawed_triple = {
         "subject": "memory use",
         "subject_resolved": "memory_usage",  # Invalid: not an anaphoric pronoun
@@ -199,9 +199,8 @@ def test_anomaly_unnecessary_subject_resolved(checker_tool):
         "object": "13 and 48 percent",
     }
     reasons = checker_tool.inspect_single_triple(flawed_triple)
-    # Must fail if the rule checker doesn't catch it
     assert len(reasons) > 0, "Expected rule checker to flag unnecessary subject_resolved, but none found."
-    assert any("subject_resolved" in r.lower() or "anaphora" in r.lower() for r in reasons)
+    assert any("subject_resolved" in r.lower() for r in reasons)
 
 def test_clean_metric_all_or_none_passes(checker_tool):
     """Verifies that both fields being present (or both being null) passes the consistency check cleanly."""

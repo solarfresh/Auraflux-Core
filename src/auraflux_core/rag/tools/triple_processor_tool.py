@@ -302,21 +302,26 @@ class TripleRuleCheckerTool(BaseTool):
 
     def _check_anaphora_rules(self, item: TripleItem) -> List[str]:
         """
-        Validates anaphora resolution rules using regex patterns:
-        - If the subject is anaphoric/demonstrative (is_anaphoric = True), 'subject_resolved' is MANDATORY.
-        - If the subject is a standard noun (is_anaphoric = False), 'subject_resolved' should be null/absent.
+        Validates anaphora resolution rules:
+        - Ensures anaphoric pronouns MUST have 'subject_resolved'.
+        - Flags unnecessary 'subject_resolved' provided for standard non-anaphoric subjects.
         """
         subject = str(item.subject or "").strip()
-        is_anaphoric = bool(self.anaphora_patterns.anaphora_reference_pattern.search(subject))
-        has_resolved = item.subject_resolved is not None and str(item.subject_resolved).strip() != ""
+        subject_resolved = item.subject_resolved
 
-        # Case 1: It's anaphoric (like "這項技術"), but missing required resolution
+        is_anaphoric = bool(self.anaphora_patterns.anaphora_reference_pattern.search(subject))
+        has_resolved = subject_resolved is not None and str(subject_resolved).strip() != ""
+
+        # Case 1: Anaphoric pronoun missing required resolution
         if is_anaphoric and not has_resolved:
             return [f"Subject contains unresolved anaphoric pronoun without subject_resolved: '{subject}'"]
 
-        # Case 2: It's a standard non-anaphoric noun (like "memory use"), but has unnecessary resolution
+        # Case 2: Standard non-anaphoric subject provided with subject_resolved
         if not is_anaphoric and has_resolved:
-            return [f"Unnecessary subject_resolved provided for non-anaphoric subject: '{subject}'"]
+            return [
+                f"Redundant subject_resolved provided for non-anaphoric subject: '{subject}'. "
+                f"If '{subject}' is a standard noun, set 'subject_resolved' to null."
+            ]
 
         return []
 
