@@ -1,4 +1,5 @@
 import json
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,7 +12,7 @@ from auraflux_core.core.schemas.messages import Message
 
 
 class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
-    """Mock Agent inheriting BaseAgent and PlanAndExecuteHandler for type compliance."""
+    """Mock Agent inheriting BaseAgent and PlanAndExecuteHandler adhering to the Deterministic Pipeline contract."""
 
     generate: AsyncMock
 
@@ -19,6 +20,7 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
         mock_config = MagicMock()
         mock_config.name = "MockPlanAgent"
         mock_config.pipeline_name = "plan_and_execute"
+        mock_config.prompt_config = None
         mock_client_manager = MagicMock()
 
         super().__init__(config=mock_config, client_manager=mock_client_manager)
@@ -31,21 +33,24 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
     def name(self) -> str:
         return "MockPlanAgent"
 
-    def get_system_message_map(self):
-        return {"default": "System Prompt"}
-
-    def build_plan_messages(self, payload):
+    def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
         return [Message(role="user", content="Plan stage prompt", name=self.name)]
 
-    def extract_tool_call_spec(self, payload, plan_output):
+    async def execute_tool_workflow(
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any]
+    ) -> List[Message]:
+        """Deterministic Stage 2 Workflow Hook delegated by PlanAndExecutePipeline."""
         if plan_output.get("needs_tool"):
-            return {
-                "tool_name": "search_tool",
-                "tool_args": {"query": plan_output.get("query")},
-            }
-        return None
+            tool_msg = await self.tool_executor.run(
+                tool_name="search_tool",
+                tool_args={"query": plan_output.get("query")},
+            )
+            return [tool_msg]
+        return []
 
-    def build_synthesis_messages(self, payload, plan_output, tool_results):
+    def build_synthesis_messages(
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any], tool_results: List[Message]
+    ) -> List[Message]:
         evidence = tool_results[0].content if tool_results else "No evidence"
         return [
             Message(
@@ -55,7 +60,9 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
             )
         ]
 
-    def parse_final_output(self, payload, plan_output, raw_llm_output):
+    def parse_final_output(
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
+    ) -> Dict[str, Any]:
         return {"status": "SUCCESS", "result": raw_llm_output}
 
 
@@ -68,6 +75,7 @@ class MockAgentWithoutHandler(BaseAgent):
         mock_config = MagicMock()
         mock_config.name = "MockSimpleAgent"
         mock_config.pipeline_name = "direct"
+        mock_config.prompt_config = None
         mock_client_manager = MagicMock()
 
         super().__init__(config=mock_config, client_manager=mock_client_manager)
@@ -77,9 +85,6 @@ class MockAgentWithoutHandler(BaseAgent):
     @property
     def name(self) -> str:
         return "MockSimpleAgent"
-
-    def get_system_message_map(self):
-        return {"default": "System Prompt"}
 
 
 # =============================================================================
@@ -147,7 +152,7 @@ async def test_direct_pipeline_with_generic_dict_payload():
 
 @pytest.mark.asyncio
 async def test_plan_and_execute_pipeline_full_flow():
-    """Verify PlanAndExecutePipeline executes Stage 1 (Plan), Stage 2 (Tool), and Stage 3 (Synthesis)."""
+    """Verify PlanAndExecutePipeline executes Stage 1 (Plan), Stage 2 (execute_tool_workflow), and Stage 3 (Synthesis)."""
     pipeline = PlanAndExecutePipeline()
     agent = MockAgentWithHandler()
 
@@ -185,7 +190,7 @@ async def test_plan_and_execute_pipeline_full_flow():
 
 @pytest.mark.asyncio
 async def test_plan_and_execute_pipeline_without_tool_execution():
-    """Verify PlanAndExecutePipeline skips tool execution when extract_tool_call_spec returns None."""
+    """Verify PlanAndExecutePipeline handles empty workflow output when execute_tool_workflow returns empty list."""
     pipeline = PlanAndExecutePipeline()
     agent = MockAgentWithHandler()
 

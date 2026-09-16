@@ -16,7 +16,7 @@ class DirectPipeline(BaseAgentPipeline):
     Completely decoupled and universal with zero handler requirements.
     """
 
-    async def execute(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
+    async def _run_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any], **kwargs) -> Any:
         if "messages" in payload and isinstance(payload["messages"], list):
             messages = payload["messages"]
         elif "prompt" in payload:

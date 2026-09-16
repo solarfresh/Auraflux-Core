@@ -1,8 +1,9 @@
 import json
 from typing import Any, Dict, List, Optional, cast
 
-from auraflux_core.alignment.objective_claim.schemas import (
-    ObjectiveClaimVerdict, ObjectiveDiagnosticAnalysis)
+from auraflux_core.alignment.mental_model.schemas import (
+    FourDimensionAssumptionMatrix, MentalModelClaimVerdict,
+    MentalModelDiagnosticAnalysis)
 from auraflux_core.alignment.pipelines import AlignmentHandler
 from auraflux_core.alignment.schemas import TripleItem
 from auraflux_core.core.agents.base_agent import BaseAgent
@@ -12,36 +13,45 @@ from auraflux_core.core.schemas.messages import Message
 logger = get_logger(__name__)
 
 
-class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
+class MentalModelAgent(BaseAgent, AlignmentHandler):
     """
-    Specialized Alignment Agent for diagnosing and verifying objective claims.
+    Specialized Alignment Agent for diagnosing subjective mental-model
+    (expectation/belief) claims.
 
     Acts as a Domain Provider:
-    1. Inherits infrastructure capabilities from BaseAgent (LLM generation, ToolExecutor)[cite: 11].
-    2. Inherits shared retrieval spec logic from BaseAlignmentHandler.
+    1. Inherits infrastructure capabilities from BaseAgent (LLM generation, ToolExecutor).
+    2. Inherits shared retrieval spec logic from BaseAlignmentHandler (retrieval-only path,
+       same as ObjectiveClaimAgent — no deterministic calculation step is involved).
     3. Implements PlanAndExecuteHandler via BaseAlignmentHandler to supply domain prompts,
-       a deterministic tool execution workflow, and output parsing to PlanAndExecutePipeline[cite: 11].
+       a retrieval-based tool execution workflow, and output parsing to PlanAndExecutePipeline.
     """
 
     def get_system_message_map(self) -> Dict[str, str]:
         return {
             "zh": (
-                "你是一名客觀聲明稽核專家（Objective Claim Audit Specialist）。\n"
+                "你是一名心智模型與主觀期待稽核專家（Mental Model Audit Specialist）。\n"
                 "你的核心任務是針對傳入命題進行正交診斷分析（Orthogonal Diagnostics）：\n"
-                "1. 剖析隱性前提（資源授權、團隊能力與因果依賴）。\n"
-                "2. 實施「標準與量化診斷」，剝離主觀形容與抽象描述，提取明確可稽核的數據指標與所需產物類型（Required Artifact Types, 如 Log、 Commit、驗收報告）。\n"
-                "3. 檢測足跡衝突（Footprint Conflicts）並構建精準的事證檢索計畫。\n"
-                "在驗證階段，你必須嚴格基於檢索到的客觀佐證進行事實導向的判決（VERIFIED / PARTIALLY_VERIFIED / UNSUPPORTED），絕不允許主觀臆測。"
+                "1. 【主戰場】發動四維度防遺漏矩陣（Capability, Resources, Causality, Environment），"
+                "剖析主體對另一實體隱含且未經證實的認知假設。\n"
+                "2. 標註主觀期待中的模糊形容詞與抽象概念，指出待量化的指標（如 SLA 時間、驗收標準）。\n"
+                "3. 捕捉主觀期待與客觀規章/限制間可能存在的認知落差，並構建精準的事證檢索計畫。\n"
+                "在驗證階段，你必須嚴格基於檢索到的客觀證據判斷主觀期待是否成立，"
+                "判決結果為 VERIFIED（認知吻合）/ VIOLATED（證實落差）/ UNSUPPORTED（關鍵假設無佐證），絕不允許臆測評分。"
             ),
             "default": (
-                "You are an Objective Claim Audit Specialist responsible for orthogonal diagnostic analysis "
-                "and evidence-based verification of input claims.\n"
+                "You are a Mental Model Audit Specialist responsible for orthogonal diagnostic analysis "
+                "of subjective expectations, beliefs, and implicit assumptions held by one party about another.\n"
                 "Your core responsibilities:\n"
-                "1. Analyze implicit premises (resource authorization, capability assumptions, and causality).\n"
-                "2. Execute standardization and quantification diagnostics to strip subjective phrasing and extract audit-ready metrics alongside required artifact types (e.g., logs, commits, spec docs).\n"
-                "3. Detect footprint conflicts and formulate targeted evidence retrieval strategies.\n"
-                "During verification, you must strictly evaluate claims against retrieved objective evidence "
-                "to render fact-based determinations (VERIFIED / PARTIALLY_VERIFIED / UNSUPPORTED) without subjective hallucination."
+                "1. [Main battlefield] Run the four-dimension assumption matrix "
+                "(Capability, Resources, Causality, Environment) to surface implicit, "
+                "unverified cognitive assumptions.\n"
+                "2. Flag vague subjective adjectives and abstract expectations, identifying which "
+                "metrics still require quantification (e.g., SLA duration, acceptance criteria).\n"
+                "3. Detect potential gaps between the subjective expectation and objective policy/"
+                "constraints, and formulate a targeted evidence retrieval strategy.\n"
+                "During verification, you must judge whether the subjective expectation holds strictly "
+                "against retrieved objective evidence, rendering VERIFIED (aligned) / VIOLATED (confirmed gap) / "
+                "UNSUPPORTED (key assumption has no evidence) without subjective hallucination."
             ),
         }
 
@@ -50,7 +60,7 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
     # =========================================================================
 
     def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
-        """Stage 1 Hook: Builds prompt to analyze claim and specify 1-to-1 targeted retrieval fields."""
+        """Stage 1 Hook: Builds prompt to analyze the expectation and specify targeted retrieval fields."""
         formatter = getattr(self, "prompt_formatter", None)
         format_messages = getattr(formatter, "format_messages", None)
         if callable(format_messages):
@@ -73,22 +83,34 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
             "Task:\n"
             "1. Extract semantic triples (Subject -> Predicate -> Object).\n"
             "2. Perform orthogonal diagnosis:\n"
-            "   - implicit_premises: Unstated assumptions regarding Capability, Resources, Causality, or Environment.\n"
-            "   - quantification_requirements: Clear metrics, required artifact types, and acceptance criteria.\n"
-            "   - boundary_conflicts: Potential resource or rule conflicts.\n"
-            "3. Formulate targeted retrieval queries (`queries`). Generate 1 to 2 distinct query items "
-            "tailored to specific search intents. Each item must strictly bind to ONE text field and ONE vector field:\n"
-            "   - `query_text`: The rewritten query string optimized for retrieval (MUST BE IN ENGLISH to match knowledge base).\n"
-            "   - `target_type`: The retrieval intent, chosen strictly from ['question', 'concept_title', 'concept_desc', 'evidence']:\n"
-            "       * 'question': Target underlying core questions. (text_field: 'target_question', vector_field: 'question_vector')\n"
-            "       * 'concept_title': Target specific concept names/terms. (text_field: 'concept_title', vector_field: 'concept_vector')\n"
-            "       * 'concept_desc': Target concept definitions and mechanisms. (text_field: 'concept_description', vector_field: 'concept_vector')\n"
-            "       * 'evidence': Target concrete empirical facts or evidence. (text_field: 'evidence_text', vector_field: 'evidence_vector')\n"
-            "   - `text_field`: Exactly ONE text field name from ['target_question', 'concept_title', 'concept_description', 'evidence_text'].\n"
-            "   - `vector_field`: Exactly ONE vector field name from ['question_vector', 'concept_vector', 'evidence_vector'].\n\n"
+            "   - implicit_premises (MAIN BATTLEFIELD): Run the 4D assumption matrix. For EACH of the "
+            "four dimensions below, list unverified assumptions found in the claim (empty array if none):\n"
+            "       * capability_assumptions: assumptions about the counterparty's technical/execution capability.\n"
+            "       * resource_assumptions: assumptions about resource, budget, or authorization scope.\n"
+            "       * causality_assumptions: unexamined links taken for granted in the causal chain.\n"
+            "       * environment_assumptions: assumptions that the external environment stays static.\n"
+            "   - quantification_requirements: Vague subjective adjectives/abstract expectations mapped to "
+            "the metric that still needs to be quantified (e.g. {'quickly': 'needs SLA in days'}).\n"
+            "   - boundary_conflicts: Potential gaps between this subjective expectation and known policy/"
+            "constraints (has_conflict flag + description).\n"
+            "3. Formulate targeted retrieval queries (`queries`) to search Core Context for evidence that "
+            "supports or refutes this expectation (e.g., design docs, prior commitments, org policy). "
+            "Generate 1 to 2 distinct query items tailored to specific search intents. Each item must "
+            "strictly bind to ONE text field and ONE vector field:\n"
+            "   - `query_text`: The rewritten query string optimized for retrieval (MUST BE IN ENGLISH).\n"
+            "   - `target_type`: chosen strictly from ['question', 'concept_title', 'concept_desc', 'evidence']:\n"
+            "       * 'question': (text_field: 'target_question', vector_field: 'question_vector')\n"
+            "       * 'concept_title': (text_field: 'concept_title', vector_field: 'concept_vector')\n"
+            "       * 'concept_desc': (text_field: 'concept_description', vector_field: 'concept_vector')\n"
+            "       * 'evidence': (text_field: 'evidence_text', vector_field: 'evidence_vector')\n"
+            "   - `text_field`: Exactly ONE text field name from ['target_question', 'concept_title', "
+            "'concept_description', 'evidence_text'].\n"
+            "   - `vector_field`: Exactly ONE vector field name from ['question_vector', 'concept_vector', "
+            "'evidence_vector'].\n\n"
             "CRITICAL FORMAT RULES:\n"
             "- `query_text` MUST BE IN ENGLISH regardless of the input claim language.\n"
-            "- `quantification_requirements` MUST BE A DICTIONARY OBJECT (NOT A LIST/ARRAY).\n"
+            "- `quantification_requirements` and `boundary_conflicts` MUST BE DICTIONARY OBJECTS (NOT ARRAYS).\n"
+            "- `implicit_premises` MUST be an object with exactly the four keys listed above, each an array.\n"
             "- `queries` MUST BE A NON-EMPTY ARRAY containing 1 or 2 targeted query objects.\n\n"
             "Required Output JSON Format:\n"
             "{\n"
@@ -96,14 +118,14 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
             '    {"subject": "...", "predicate": "...", "object": "..."}\n'
             '  ],\n'
             '  "diagnostics": {\n'
-            '    "implicit_premises": ["..."],\n'
-            '    "quantification_requirements": {\n'
-            '      "required_artifact_types": ["..."],\n'
-            '      "acceptance_criteria": "..."\n'
+            '    "implicit_premises": {\n'
+            '      "capability_assumptions": ["..."],\n'
+            '      "resource_assumptions": ["..."],\n'
+            '      "causality_assumptions": ["..."],\n'
+            '      "environment_assumptions": ["..."]\n'
             '    },\n'
-            '    "boundary_conflicts": {\n'
-            '      "has_conflict": false\n'
-            '    }\n'
+            '    "quantification_requirements": {"...": "..."},\n'
+            '    "boundary_conflicts": {"has_conflict": false}\n'
             '  },\n'
             '  "queries": [\n'
             '    {\n'
@@ -144,37 +166,50 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
 
         prompt = (
             f"Proposition ID: {proposition_id}\n"
-            f"Claim: {claim_text}\n"
+            f"Claim (Subjective Expectation): {claim_text}\n"
             f"Extracted Claim Triples (Stage 1): {json.dumps(plan_output.get('triples', []), ensure_ascii=False)}\n"
             f"Diagnostics (Stage 1): {json.dumps(plan_output.get('diagnostics', {}), ensure_ascii=False)}\n\n"
             f"Retrieved Structured Core Context Evidence:\n{formatted_evidence_text}\n\n"
             "Task:\n"
-            "1. Perform a thorough cross-examination of the Claim and Stage 1 Diagnostics against the Retrieved Evidence.\n"
-            "2. Evaluate and EXPLICITLY OUTPUT the `diagnostic_evaluation` for each diagnostic item:\n"
-            "   - `implicit_premises_eval`: Assess if the unstated assumptions are supported by evidence.\n"
-            "   - `quantification_eval`: Assess if the quantitative requirements/metrics are fully satisfied by evidence.\n"
-            "   - `boundary_conflicts_eval`: Detail whether the boundary conflicts identified in Stage 1 are resolved, mitigated, or violated by the evidence.\n"
+            "1. Perform a thorough cross-examination of the subjective expectation and Stage 1 4D "
+            "assumption matrix against the Retrieved Evidence.\n"
+            "2. Evaluate and EXPLICITLY OUTPUT `diagnostic_evaluation` for each diagnostic dimension:\n"
+            "   - `capability_eval`: Is the capability assumption supported by evidence?\n"
+            "   - `resource_eval`: Is the resource/authorization assumption supported by evidence?\n"
+            "   - `causality_eval`: Does evidence support the assumed causal chain?\n"
+            "   - `environment_eval`: Does evidence confirm the environment assumption still holds?\n"
+            "   - `quantification_eval`: Are the flagged vague expectations now quantifiable from evidence?\n"
+            "   - `boundary_conflicts_eval`: Is the subjective expectation in conflict with objective "
+            "policy/constraints found in evidence?\n"
             "3. Determine the final `status`:\n"
-            "   - 'VERIFIED': Fully supported by evidence, all quantitative criteria met, and ALL boundary conflicts are fully resolved.\n"
-            "   - 'PARTIALLY_VERIFIED': Main claim is supported, BUT missing quantitative metrics, unfulfilled criteria, or UNRESOLVED boundary conflicts remain.\n"
-            "   - 'UNSUPPORTED': Insufficient evidence, direct factual contradiction, or major boundary conflict violation.\n"
+            "   - 'VERIFIED': The subjective expectation is fully aligned with retrieved evidence "
+            "(equivalent to ALIGNED) — no unresolved assumption or conflict remains.\n"
+            "   - 'VIOLATED': Evidence confirms a cognitive gap between the expectation and actual "
+            "state (equivalent to MISALIGNED).\n"
+            "   - 'UNSUPPORTED': A key assumption in the 4D matrix has no supporting or refuting "
+            "evidence at all (equivalent to OPAQUE_RISK) — this MUST trigger a BLOCK requiring "
+            "human clarification.\n"
             "4. Fill `verification_proofs` with exact supporting quotes, locations, or triples from evidence.\n"
             "5. Fill `compliance_gap`:\n"
             "   - If status is 'VERIFIED': MUST be set to `null`.\n"
-            "   - If status is 'PARTIALLY_VERIFIED' or 'UNSUPPORTED': MUST be a string explicitly summarizing the gaps, unfulfilled metrics, or unresolved boundary conflicts.\n\n"
+            "   - If status is 'VIOLATED' or 'UNSUPPORTED': MUST be a string explicitly summarizing the "
+            "gap, unresolved assumption, or conflict.\n\n"
             "CRITICAL FORMAT RULES:\n"
-            "- `diagnostic_evaluation` MUST be a nested object with text descriptions for all 3 diagnostic dimensions.\n"
+            "- `diagnostic_evaluation` MUST be a nested object with text descriptions for all 6 dimensions above.\n"
             "- `compliance_gap` MUST BE A PLAIN STRING OR `null` (NEVER AN OBJECT OR LIST).\n\n"
             "Required Output JSON Format:\n"
             "{\n"
             '  "diagnostic_evaluation": {\n'
-            '    "implicit_premises_eval": "Evaluation of assumptions against evidence...",\n'
-            '    "quantification_eval": "Evaluation of metrics and criteria against evidence...",\n'
-            '    "boundary_conflicts_eval": "Evaluation of boundary conflicts (whether resolved or remaining as gaps)..."\n'
+            '    "capability_eval": "...",\n'
+            '    "resource_eval": "...",\n'
+            '    "causality_eval": "...",\n'
+            '    "environment_eval": "...",\n'
+            '    "quantification_eval": "...",\n'
+            '    "boundary_conflicts_eval": "..."\n'
             '  },\n'
-            '  "status": "VERIFIED" | "PARTIALLY_VERIFIED" | "UNSUPPORTED",\n'
+            '  "status": "VERIFIED" | "VIOLATED" | "UNSUPPORTED",\n'
             '  "verification_proofs": ["..."],\n'
-            '  "compliance_gap": "Brief description string of missing criteria/gaps/conflicts, or null if fully verified"\n'
+            '  "compliance_gap": "Brief description string of the gap/unresolved assumption, or null"\n'
             "}"
         )
 
@@ -182,14 +217,21 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
 
     def parse_final_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
-    ) -> ObjectiveClaimVerdict:
+    ) -> MentalModelClaimVerdict:
         """Domain Transformation Hook: Maps Stage 1 & Stage 3 outputs into Pydantic Schema."""
         parsed_data = self.output_parser.parse_json(raw_llm_output)
 
         triples = [
             TripleItem(**item) for item in plan_output.get("triples", [])
         ]
-        diagnostics = ObjectiveDiagnosticAnalysis(**plan_output.get("diagnostics", {}))
+
+        raw_diagnostics = plan_output.get("diagnostics", {})
+        raw_implicit_premises = raw_diagnostics.get("implicit_premises", {})
+        diagnostics = MentalModelDiagnosticAnalysis(
+            implicit_premises=FourDimensionAssumptionMatrix(**raw_implicit_premises),
+            quantification_requirements=raw_diagnostics.get("quantification_requirements", {}),
+            boundary_conflicts=raw_diagnostics.get("boundary_conflicts", {}),
+        )
 
         diagnostic_eval = parsed_data.get("diagnostic_evaluation", {})
         boundary_eval = diagnostic_eval.get("boundary_conflicts_eval", "")
@@ -206,13 +248,13 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
             compliance_gap = None
 
         if status == "UNSUPPORTED" and not compliance_gap:
-            compliance_gap = f"Core Context contains no supporting evidence. Boundary evaluation: {boundary_eval}"
-        elif status == "PARTIALLY_VERIFIED" and not compliance_gap:
-            compliance_gap = f"Claim is partially verified. Remaining issues: {boundary_eval}"
+            compliance_gap = f"A key assumption in the 4D matrix has no supporting evidence. Boundary evaluation: {boundary_eval}"
+        elif status == "VIOLATED" and not compliance_gap:
+            compliance_gap = f"Subjective expectation conflicts with evidence. Boundary evaluation: {boundary_eval}"
         elif status == "VERIFIED":
             compliance_gap = None
 
-        verdict = ObjectiveClaimVerdict(
+        verdict = MentalModelClaimVerdict(
             proposition_id=payload.get("proposition_id", ""),
             claim_text=payload.get("claim_text", ""),
             triples=triples,
@@ -295,10 +337,11 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
         routing_key: Optional[str] = None,
         index_name: Optional[str] = None,
         tool_args_map: Optional[Dict[str, Any]] = None,
-    ) -> ObjectiveClaimVerdict:
+    ) -> MentalModelClaimVerdict:
         """
-        Main execution facade for verifying an individual objective claim.
-        Delegates execution directly to the bound Pipeline strategy via agent.run()[cite: 11].
+        Main execution facade for verifying an individual mental-model (subjective
+        expectation) claim. Delegates execution directly to the bound Pipeline
+        strategy via agent.run().
         """
         payload: Dict[str, Any] = {
             "proposition_id": proposition_id,
@@ -311,5 +354,5 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
         if index_name is not None:
             payload["index_name"] = index_name
 
-        # Executes via BaseAgent.run(), which delegates directly to self.pipeline[cite: 11]
+        # Executes via BaseAgent.run(), which delegates directly to self.pipeline
         return await self.run(payload)

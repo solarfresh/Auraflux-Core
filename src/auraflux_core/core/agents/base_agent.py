@@ -1,18 +1,21 @@
 import json
-from abc import ABC, abstractmethod
+import time
+from abc import ABC
 from copy import deepcopy
 from typing import Any, Dict, Generator, List
 
 from auraflux_core.core.agents.pipelines.base import (BaseAgentPipeline,
                                                       PipelineRegistry)
 from auraflux_core.core.clients.client_manager import ClientManager
-from auraflux_core.core.configs.logging_config import setup_logging
+from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.messages import PromptFormatter
 from auraflux_core.core.parsers import OutputParser
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.tools import ToolExecutor
+
+logger = get_logger(__name__)
 
 
 class BaseAgent(ABC):
@@ -25,12 +28,9 @@ class BaseAgent(ABC):
     def __init__(self, config: AgentConfig, client_manager: ClientManager):
         self.config = config
         self.client_manager = client_manager
-        self.logger = setup_logging(name=f"[{self.config.name}]")
-        self.logger.info(f"Agent '{self.config.name}' initialized.")
 
         self.prompt_formatter = PromptFormatter(
             config=self.config,
-            system_message_map=self.get_system_message_map(),
         )
 
         self.tool_executor = ToolExecutor(
@@ -42,6 +42,14 @@ class BaseAgent(ABC):
 
         pipeline_name = getattr(self.config, "pipeline_name", "direct")
         self.pipeline: BaseAgentPipeline = PipelineRegistry.get(pipeline_name)
+
+        logger.info(
+            "agent_initialized",
+            agent_name=self.name,
+            provider=self.provider,
+            model=self.model,
+            pipeline=pipeline_name,
+        )
 
     @property
     def provider(self) -> str:
@@ -63,6 +71,7 @@ class BaseAgent(ABC):
     async def generate(self, messages: List[Message]) -> Message:
         """Pure LLM inference execution capability."""
         copied_messages = [deepcopy(msg) for msg in messages]
+        start_time = time.perf_counter()
 
         try:
             request = LLMRequest(
@@ -73,13 +82,32 @@ class BaseAgent(ABC):
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
                 thinking_level=self.config.thinking_level,
+                output_format=self.config.output_format,
+                output_schema=self.config.output_schema
             )
 
-            self.logger.debug(f"Sending request to LLM: {request}")
-            response: LLMResponse = await self.client_manager.generate(request)
-            self.logger.debug(f"Received response from LLM: {response}")
+            logger.debug(
+                "llm_generate_started",
+                agent_name=self.name,
+                provider=self.provider,
+                model=self.model,
+                message_count=len(copied_messages),
+            )
 
+            response: LLMResponse = await self.client_manager.generate(request)
+            latency_sec = time.perf_counter() - start_time
             output_string = self.postprocess_output(response.text)
+
+            logger.info(
+                "llm_generate_completed",
+                agent_name=self.name,
+                provider=self.provider,
+                model=self.model,
+                token_usage=response.token_usage,
+                latency_sec=round(latency_sec, 4),
+                output_format=self.config.output_format,
+                status="success",
+            )
 
             return Message(
                 role='assistant',
@@ -88,7 +116,17 @@ class BaseAgent(ABC):
                 token_usage=response.token_usage
             )
         except Exception as e:
-            self.logger.error(f"Error during LLM generation for agent '{self.name}': {e}")
+            latency_sec = time.perf_counter() - start_time
+            logger.error(
+                "llm_generate_failed",
+                agent_name=self.name,
+                provider=self.provider,
+                model=self.model,
+                error_type=type(e).__name__,
+                error_msg=str(e),
+                latency_sec=round(latency_sec, 4),
+                exc_info=True,
+            )
             raise e
 
     def generate_stream(self, message: Message, chat_history: List[Message]) -> Generator[Message, Any, Any]:
@@ -102,21 +140,27 @@ class BaseAgent(ABC):
             messages=messages,
             system_message=self.system_message,
         )
+
+        logger.info(
+            "llm_stream_started",
+            agent_name=self.name,
+            provider=self.provider,
+            model=self.model,
+            history_length=len(chat_history),
+        )
+
         response_stream = self.client_manager.generate_stream(request)
         for response in response_stream:
             yield Message(role='assistant', content=response.text, name=self.name)
-
-    @abstractmethod
-    def get_system_message_map(self) -> Dict[str, str]:
-        """Abstract method to be implemented by subclasses to provide system messages."""
-        pass
 
     def register_tools(self, tools: Any) -> "BaseAgent":
         """Delegates tool registration directly to the underlying ToolExecutor."""
         if self.tool_executor:
             self.tool_executor.register_tools(tools)
-            self.logger.info(
-                f"Updated tools via ToolExecutor. Active tools: {list(self.tool_executor.tool_registry.keys())}"
+            logger.info(
+                "tools_registered",
+                agent_name=self.name,
+                active_tools=list(self.tool_executor.tool_registry.keys()),
             )
         return self
 

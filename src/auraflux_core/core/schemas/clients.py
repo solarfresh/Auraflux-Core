@@ -48,11 +48,9 @@ class LLMRequest(BaseModel):
     temperature: float = 0.7
     top_p: float = 0.95
     thinking_level: Optional[Literal['minimal', 'low', 'medium', 'high']] = None
-    tools: Optional[List["BaseTool"]] = Field(default=None)
-
-    # Non-standard field required by our infrastructure for structured output.
-    # Pydantic allows us to explicitly define this alongside standard params.
+    output_format: Optional[Any] = Field(default=None)
     output_schema: Optional[Dict[str, Any]] = Field(default=None)
+    tools: Optional[List["BaseTool"]] = Field(default=None)
 
 
 class LLMResponse(BaseModel):

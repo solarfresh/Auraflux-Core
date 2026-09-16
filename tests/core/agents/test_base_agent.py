@@ -2,44 +2,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.agents.pipelines.base import BaseAgentPipeline
 from auraflux_core.core.agents.pipelines.direct import DirectPipeline
 from auraflux_core.core.schemas.agents import AgentConfig
-
-
-class ConcreteAgent(BaseAgent):
-    """Concrete implementation of BaseAgent for testing purposes."""
-
-    generate: AsyncMock  # Explicit type annotation for Pylance
-
-    def __init__(self, config: AgentConfig, client_manager: MagicMock):
-        super().__init__(config=config, client_manager=client_manager)
-        self.generate = AsyncMock()
-
-    def get_system_message_map(self):
-        return {"default": "Default System Prompt", "zh": "預設系統提示詞"}
-
-
-@pytest.fixture
-def mock_client_manager():
-    return MagicMock()
-
-
-@pytest.fixture
-def default_config():
-    config = MagicMock(spec=AgentConfig)
-    config.name = "TestAgent"
-    config.provider = "openai"
-    config.model = "gpt-4o"
-    config.pipeline_name = "direct"
-    config.turn_limit = 10
-    config.output_format = "TEXT"
-    config.lang = "default"
-    config.system_message = None
-    config.tools = None
-    config.tool_call_protocol = "native"  # Set default protocol to prevent AttributeError
-    return config
 
 
 # =============================================================================
@@ -47,18 +12,22 @@ def default_config():
 # =============================================================================
 
 
-def test_base_agent_init_binds_correct_pipeline(default_config, mock_client_manager):
+def test_base_agent_init_binds_correct_pipeline(
+    default_config, mock_client_manager, concrete_agent_factory
+):
     """Verify BaseAgent binds the appropriate Pipeline instance based on config.pipeline_name."""
     default_config.pipeline_name = "direct"
-    agent = ConcreteAgent(config=default_config, client_manager=mock_client_manager)
+    agent = concrete_agent_factory(config=default_config, client_manager=mock_client_manager)
 
     assert isinstance(agent.pipeline, BaseAgentPipeline)
     assert isinstance(agent.pipeline, DirectPipeline)
 
 
-def test_register_tools_via_agent_delegates_to_executor(default_config, mock_client_manager, dummy_tool):
+def test_register_tools_via_agent_delegates_to_executor(
+    default_config, mock_client_manager, dummy_tool, concrete_agent_factory
+):
     """Verify calling agent.register_tools updates tool_registry in ToolExecutor."""
-    agent = ConcreteAgent(config=default_config, client_manager=mock_client_manager)
+    agent = concrete_agent_factory(config=default_config, client_manager=mock_client_manager)
 
     # Register via list
     agent.register_tools([dummy_tool])
@@ -72,9 +41,11 @@ def test_register_tools_via_agent_delegates_to_executor(default_config, mock_cli
 
 
 @pytest.mark.asyncio
-async def test_agent_run_delegates_to_pipeline(default_config, mock_client_manager):
+async def test_agent_run_delegates_to_pipeline(
+    default_config, mock_client_manager, concrete_agent_factory
+):
     """Verify calling agent.run(payload) delegates execution flow directly to bound Pipeline."""
-    agent = ConcreteAgent(config=default_config, client_manager=mock_client_manager)
+    agent = concrete_agent_factory(config=default_config, client_manager=mock_client_manager)
 
     mock_pipeline = MagicMock(spec=BaseAgentPipeline)
     mock_pipeline.execute = AsyncMock(return_value="pipeline_result")
@@ -87,9 +58,11 @@ async def test_agent_run_delegates_to_pipeline(default_config, mock_client_manag
     assert result == "pipeline_result"
 
 
-def test_base_tool_executor_register_tools_formats(default_config, mock_client_manager, dummy_tool):
+def test_base_tool_executor_register_tools_formats(
+    default_config, mock_client_manager, dummy_tool, concrete_agent_factory
+):
     """Verify ToolExecutor handles both List[BaseTool] and Dict[str, BaseTool] registration formats."""
-    agent = ConcreteAgent(config=default_config, client_manager=mock_client_manager)
+    agent = concrete_agent_factory(config=default_config, client_manager=mock_client_manager)
     executor = agent.tool_executor
 
     # 1. Register List format

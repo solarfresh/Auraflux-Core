@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from auraflux_core.alignment.objective_claim.agents import ObjectiveClaimAgent
-from auraflux_core.alignment.orchestrators import \
-    AlignmentOrchestrator
 from auraflux_core.alignment.objective_claim.schemas import (
-    DiagnosticAnalysis, ObjectiveClaimVerdict, TripleItem)
+    ObjectiveClaimVerdict, ObjectiveDiagnosticAnalysis)
+from auraflux_core.alignment.orchestrators import AlignmentOrchestrator
+from auraflux_core.alignment.schemas import TripleItem
 from auraflux_core.core.orchestrators.state import OrchestratorStatus
 
 
@@ -37,16 +37,46 @@ async def test_orchestrator_execute_all_verified(orchestrator, mock_agent):
     verdict_1 = ObjectiveClaimVerdict(
         proposition_id="PROP-001",
         claim_text="Claim 1 statement",
-        triples=[TripleItem(subject="S1", predicate="P1", object="O1")],
-        diagnostics=DiagnosticAnalysis(),
+        triples=[
+            TripleItem(
+                subject="S1",
+                predicate="P1",
+                object="O1",
+                metric_name="metric1",
+                normalized_value=1.0,
+                unit="unit1",
+                operator="=",
+                subject_resolved="True",
+                data_target="O1"
+            )
+        ],
+        diagnostics=ObjectiveDiagnosticAnalysis(
+            implicit_premises=[],
+            quantification_requirements={},
+        ),
         status="VERIFIED",
         verification_proofs=["proof1.pdf"],
     )
     verdict_2 = ObjectiveClaimVerdict(
         proposition_id="PROP-002",
         claim_text="Claim 2 statement",
-        triples=[TripleItem(subject="S2", predicate="P2", object="O2")],
-        diagnostics=DiagnosticAnalysis(),
+        triples=[
+            TripleItem(
+                subject="S2",
+                predicate="P2",
+                object="O2",
+                metric_name="metric2",
+                normalized_value=2.0,
+                unit="unit2",
+                operator="=",
+                subject_resolved="true",
+                data_target="O2"
+            )
+        ],
+        diagnostics=ObjectiveDiagnosticAnalysis(
+            implicit_premises=[],
+            quantification_requirements={},
+        ),
         status="VERIFIED",
         verification_proofs=["proof2.pdf"],
     )
@@ -75,13 +105,19 @@ async def test_orchestrator_execute_with_unsupported_triggers_block(orchestrator
     verdict_1 = ObjectiveClaimVerdict(
         proposition_id="PROP-001",
         claim_text="Supported claim",
-        diagnostics=DiagnosticAnalysis(),
+        diagnostics=ObjectiveDiagnosticAnalysis(
+            implicit_premises=[],
+            quantification_requirements={},
+        ),
         status="VERIFIED",
     )
     verdict_2 = ObjectiveClaimVerdict(
         proposition_id="PROP-002",
         claim_text="Unsupported claim",
-        diagnostics=DiagnosticAnalysis(),
+        diagnostics=ObjectiveDiagnosticAnalysis(
+            implicit_premises=[],
+            quantification_requirements={},
+        ),
         status="UNSUPPORTED",
         compliance_gap="No proof found",
     )

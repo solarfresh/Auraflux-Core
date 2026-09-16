@@ -4,12 +4,17 @@ from typing import Any, Dict, List, Optional, Tuple
 from auraflux_core.alignment.agents import BaseAlignmentAgent
 from auraflux_core.alignment.objective_claim.schemas import \
     ObjectiveClaimVerdict
+from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.orchestrators.state import OrchestratorState
 from auraflux_core.core.orchestrators.strategies.base import \
     OrchestrationStrategy
 
+logger = get_logger(__name__)
+
 DEFAULT_AGENT_MAPPING = {
+    "mental_model": "MentalModelAgent",
     "objective_claim": "ObjectiveClaimAgent",
+    "threshold_claim": "ThresholdClaimAgent"
 }
 
 
@@ -39,6 +44,7 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
         if not tasks:
             state.metadata["verdicts"] = []
             state.metadata["is_locked"] = True
+            logger.info("alignment_orchestration_completed", total_verdicts=0, is_locked=True)
             return state
 
         raw_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -50,7 +56,16 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
         if errors:
             state.metadata.setdefault("errors", []).extend(errors)
 
-        state.metadata["is_locked"] = not has_block
+        is_locked = not has_block
+        state.metadata["is_locked"] = is_locked
+
+        logger.info(
+            "alignment_orchestration_completed",
+            total_verdicts=len(verdicts),
+            error_count=len(errors),
+            is_locked=is_locked,
+        )
+
         return state
 
     # ----------------------------------------------------------------------
@@ -72,8 +87,10 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
             agent = agents.get(agent_key) if agent_key else None
 
             if not agent:
-                self.logger.warning(
-                    f"No agent configured/found for claim_type '{claim_type}' (ID: {claim_id}). Skipping."
+                logger.warning(
+                    "unsupported_claim_type_skipped",
+                    claim_type=claim_type,
+                    claim_id=claim_id,
                 )
                 continue
 
@@ -85,8 +102,10 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
                 )
                 tasks.append(task)
             else:
-                self.logger.error(
-                    f"Agent '{agent_key}' does not implement 'diagnose_and_verify'."
+                logger.error(
+                    "agent_method_missing",
+                    agent_key=agent_key,
+                    required_method="diagnose_and_verify",
                 )
 
         return tasks
@@ -116,7 +135,7 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
 
             elif isinstance(result, BaseException):
                 err_msg = str(result)
-                self.logger.error(f"Error during claim verification: {err_msg}")
+                logger.error("claim_verification_failed", error_msg=err_msg)
                 errors.append(err_msg)
                 has_block_condition = True
 

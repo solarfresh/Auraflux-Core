@@ -1,47 +1,104 @@
 import logging
 import sys
-from logging import Logger
-from typing import Dict
+from typing import Any, Optional
+
+import structlog
+from structlog.types import Processor
 
 from .settings import settings
 
-logger_map: Dict[str, Logger] = {}
 
-def setup_logging(name='auraflux') -> logging.Logger:
+def setup_logging(
+    name: str = "auraflux",
+    json_format: Optional[bool] = None,
+) -> Any:
     """
-    Sets up the application's logging configuration.
+    Configures structured logging for the library.
+    Safe for interactive environments (e.g., Jupyter Notebooks) and non-intrusive
+    to parent application logging setups.
 
-    The log level is set based on the `settings.log_level` environment variable.
-    If not specified, it defaults to 'INFO'.
+    Args:
+        name (str): The logger name identifier. Defaults to 'auraflux'.
+        json_format (Optional[bool]): Explicitly enable JSON rendering.
+            If None, falls back to `settings.json_logs` or non-tty detection.
 
-    @param name: The name of the logger. Defaults to 'auraflux'.
-    @return: Configured logger instance.
+    Returns:
+        structlog.stdlib.BoundLogger: Configured structured logger instance.
     """
-    if name in logger_map:
-        return logger_map[name]
-
-    # Create the logger instance
-    logger = logging.getLogger(name)
-
-    # Get the log level from settings, default to INFO if not set
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
+
+    # Determine whether to render structured JSON or human-readable console logs
+    use_json = (
+        json_format
+        if json_format is not None
+        else getattr(settings, "json_logs", not sys.stdout.isatty())
+    )
+
+    # Shared processors applied before final rendering
+    shared_processors: list[Processor] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+    ]
+
+    if use_json:
+        # JSON pipeline for Production & Async Data Pipelines
+        renderer: Processor = structlog.processors.JSONRenderer()
+    else:
+        # Development / Jupyter-friendly console pipeline
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+
+    # 1. Configure global structlog settings
+    structlog.configure(
+        processors=shared_processors + [
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
+    formatter = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=shared_processors,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            renderer,
+        ],
+    )
+
+    # 2. Configure library-specific logger isolated from the root logger
+    logger = logging.getLogger(name)
     logger.setLevel(log_level)
 
-    # Create a console handler to print logs to the standard output
-    handler = logging.StreamHandler(sys.stdout)
-
-    # Define a log message format
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    handler.setFormatter(formatter)
-
-    # Add the handler to the logger
-    logger.addHandler(handler)
-
-    # Prevent duplicate log messages in some environments
+    # Prevent duplicate logging by disabling propagation to root logger
     logger.propagate = False
 
-    logger_map[name] = logger
+    # 3. Idempotent Handler Registration: Prevent duplicate log output in Jupyter Notebooks
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    else:
+        # Update formatter on existing handlers if setup is re-executed
+        for h in logger.handlers:
+            h.setFormatter(formatter)
 
-    return logger
+    return structlog.get_logger(name)
+
+
+def get_logger(name: str = "auraflux") -> structlog.stdlib.BoundLogger:
+    """
+    Retrieves a bound structlog logger instance.
+
+    Args:
+        name (str): Name of the logger category.
+
+    Returns:
+        structlog.stdlib.BoundLogger: Bound logger instance.
+    """
+    return structlog.get_logger(name)
