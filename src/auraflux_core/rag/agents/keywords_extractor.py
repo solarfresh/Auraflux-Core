@@ -235,11 +235,18 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             tool_name="triple_processor",
             tool_args={"triples": raw_incoming_triples}
         )
-        processed_triples = (
-            processed_res.content
-            if hasattr(processed_res, "content")
-            else processed_res
-        )
+
+        raw_processed = getattr(processed_res, "content", processed_res)
+        if isinstance(raw_processed, str):
+            try:
+                processed_triples = json.loads(raw_processed)
+            except json.JSONDecodeError:
+                logger.error("failed_to_parse_triple_processor_output", raw_output=raw_processed)
+                processed_triples = raw_incoming_triples
+        elif isinstance(raw_processed, (list, dict)):
+            processed_triples = raw_processed
+        else:
+            processed_triples = raw_incoming_triples
 
         # Step 2: Inspect candidate triples via triple_rule_checker
         check_res = await self.tool_executor.run(
