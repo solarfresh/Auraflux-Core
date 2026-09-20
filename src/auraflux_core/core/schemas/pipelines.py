@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -16,4 +16,8 @@ class ValidationResult(BaseModel):
     reasons: List[str] = Field(
         default_factory=list,
         description="List of error messages, missing fields, or validation failure details."
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional context, structured tool raw outputs, or diagnostic metadata."
     )
