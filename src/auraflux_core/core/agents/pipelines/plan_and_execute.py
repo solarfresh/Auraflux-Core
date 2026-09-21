@@ -46,7 +46,7 @@ class PlanAndExecuteHandler(ABC):
         return DefaultValidationResult()
 
     def build_plan_refinement_messages(
-        self, payload: Dict[str, Any], flawed_output: Dict[str, Any], validation_result: Any
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any], validation_result: Any
     ) -> Optional[List[Message]]:
         """
         Stage 1.5 Reflection Prompt Hook.
@@ -189,12 +189,7 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
 
         handler = cast(PlanAndExecuteHandler, agent)
         current_plan = initial_plan
-        max_retries = getattr(
-            getattr(agent, "config", None),
-            "max_refine_retries",
-            payload.get('max_refine_retries', 0)
-        )
-
+        max_retries = agent.config.max_refine_retries or payload.get('max_refine_retries', 0)
         for attempt in range(max_retries + 1):
             validation_result = await handler.inspect_plan_output(payload, current_plan)
             is_valid = getattr(validation_result, "is_valid", True)
