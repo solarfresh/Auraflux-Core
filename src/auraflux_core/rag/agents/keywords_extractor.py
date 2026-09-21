@@ -132,10 +132,11 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         """
         try:
             flagged_reasons: List[str] = []
+            check_data: Dict[str, Any] = {}
 
             # Step 1: Execute incremental triple processing & rule inspection
             if "triples" in plan_output and isinstance(plan_output["triples"], list) and self.tool_executor:
-                has_flagged, flagged_reasons = await self._process_incremental_triples(plan_output)
+                has_flagged, flagged_reasons, check_data = await self._process_incremental_triples(plan_output)
 
             # Step 2: Clean tags
             if "tags" in plan_output and isinstance(plan_output["tags"], list):
@@ -150,10 +151,22 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             if flagged_reasons:
                 return ValidationResult(
                     is_valid=False,
-                    reasons=flagged_reasons
+                    reasons=flagged_reasons,
+                    metadata={
+                        "check_data": check_data,
+                        "flagged_triples": check_data.get("flagged_triples", []),
+                        "clean_triples": check_data.get("clean_triples", []),
+                    }
                 )
 
-            return ValidationResult(is_valid=True, reasons=[])
+            return ValidationResult(
+                is_valid=True,
+                reasons=[],
+                metadata={
+                    "check_data": check_data,
+                    "clean_triples": check_data.get("clean_triples", []),
+                }
+            )
 
         except Exception as e:
             logger.error(
@@ -219,7 +232,58 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             Message(role="user", content=user_content, name=self.name),
         ]
 
-    async def _process_incremental_triples(self, plan_output: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    def merge_refined_plan(
+        self,
+        payload: Dict[str, Any],
+        current_plan: Dict[str, Any],
+        refined_plan: Dict[str, Any],
+        validation_result: ValidationResult,
+    ) -> Dict[str, Any]:
+        merged_plan = dict(current_plan)
+
+        accumulated_clean: List[Dict[str, Any]] = list(
+            merged_plan.get("_accumulated_clean_triples", [])
+        )
+        clean_key_to_index = {
+            (t.get("subject"), t.get("predicate"), t.get("object")): idx
+            for idx, t in enumerate(accumulated_clean)
+        }
+        verified_clean = []
+        if hasattr(validation_result, "metadata") and isinstance(validation_result.metadata, dict):
+            verified_clean = validation_result.metadata.get("clean_triples", [])
+
+        for c_item in verified_clean:
+            c_key = (c_item.get("subject"), c_item.get("predicate"), c_item.get("object"))
+
+            if c_key in clean_key_to_index:
+                idx = clean_key_to_index[c_key]
+                accumulated_clean[idx] = c_item
+            else:
+                clean_key_to_index[c_key] = len(accumulated_clean)
+                accumulated_clean.append(c_item)
+
+        incoming_triples = refined_plan.get("triples", [])
+        candidate_triples = list(accumulated_clean)
+        candidate_key_to_index = {
+            (t.get("subject"), t.get("predicate"), t.get("object")): idx
+            for idx, t in enumerate(candidate_triples)
+        }
+        for item in incoming_triples:
+            key = (item.get("subject"), item.get("predicate"), item.get("object"))
+
+            if key in candidate_key_to_index:
+                idx = candidate_key_to_index[key]
+                candidate_triples[idx] = item
+            else:
+                candidate_key_to_index[key] = len(candidate_triples)
+                candidate_triples.append(item)
+
+        merged_plan["_accumulated_clean_triples"] = accumulated_clean
+        merged_plan["triples"] = candidate_triples
+
+        return merged_plan
+
+    async def _process_incremental_triples(self, plan_output: Dict[str, Any]) -> Tuple[bool, List[str], Dict[str, Any]]:
         """
         Helper method dedicated to handling incremental triple processing and revision.
         Cleans incoming triples, inspects rule violations via TripleRuleCheckerTool,
@@ -270,29 +334,8 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         all_reasons: List[str] = []
 
         if isinstance(check_data, dict):
-            new_clean = check_data.get("clean_triples", [])
             flagged = check_data.get("flagged_triples", [])
             has_flagged = check_data.get("has_flagged", False)
-
-            # Step 3: Deduplicate and update state using pure (subject, predicate, object) identity keys
-            accumulated_clean: List[Dict[str, Any]] = plan_output.get("_accumulated_clean_triples", [])
-
-            # Map triple key to list index for in-place updates
-            key_to_index = {
-                (t.get("subject"), t.get("predicate"), t.get("object")): idx
-                for idx, t in enumerate(accumulated_clean)
-            }
-
-            for item in new_clean:
-                key = (item.get("subject"), item.get("predicate"), item.get("object"))
-                if key in key_to_index:
-                    # If key exists, overwrite with the latest refined version
-                    idx = key_to_index[key]
-                    accumulated_clean[idx] = item
-                else:
-                    # Append new unique triple and record index
-                    key_to_index[key] = len(accumulated_clean)
-                    accumulated_clean.append(item)
 
             # Aggregate all _flag_reasons from flagged triples for validation output
             for f_item in flagged:
@@ -302,24 +345,13 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
                 elif isinstance(reasons, str):
                     all_reasons.append(reasons)
 
-            # Update internal accumulation state and write back to plan output
-            plan_output["_accumulated_clean_triples"] = accumulated_clean
-            plan_output["clean_triples"] = accumulated_clean
-
-            plan_output["flagged_triples"] = flagged
-            plan_output["_flagged_triples"] = flagged
-            plan_output["flagged_reasons"] = all_reasons
-
-            plan_output["triples"] = accumulated_clean + flagged
-
             if has_flagged:
                 logger.warning(
                     "incremental_triples_inspection_flagged",
                     flagged_count=len(flagged),
-                    accumulated_clean_count=len(accumulated_clean),
                 )
 
-        return has_flagged, all_reasons
+        return has_flagged, all_reasons, check_data
 
     def _get_cleaner_function(self):
         """Helper to safely resolve a clean_extracted_text callable from the tool registry or fallback."""

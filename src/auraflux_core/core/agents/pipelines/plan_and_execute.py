@@ -8,6 +8,7 @@ from auraflux_core.core.agents.pipelines.base import (BaseAgentPipeline,
                                                       PipelineRegistry)
 from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.schemas.messages import Message
+from auraflux_core.core.schemas.pipelines import ValidationResult
 
 if TYPE_CHECKING:
     from auraflux_core.core.agents.base_agent import BaseAgent
@@ -57,6 +58,22 @@ class PlanAndExecuteHandler(ABC):
         this attempt, instead of spinning through remaining retries.
         """
         return None
+
+    def merge_refined_plan(
+        self,
+        payload: Dict[str, Any],
+        current_plan: Dict[str, Any],
+        refined_plan: Dict[str, Any],
+        validation_result: ValidationResult,
+    ) -> Dict[str, Any]:
+        """
+        Stage 1.5 Plan Merger Hook.
+        Merges the refined plan into the current plan.
+
+        Default implementation returns `refined_plan`, optionally retaining metadata/warnings.
+        Override this method if customized field-level merging logic is needed.
+        """
+        return refined_plan
 
     @abstractmethod
     async def execute_tool_workflow(
@@ -220,7 +237,8 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
             # Generate Pass 2 reflection messages and execute repair
             logger.info("refinement_attempt_started", attempt=attempt + 1)
             refinement_response = await agent.generate(refinement_messages)
-            current_plan = agent.output_parser.parse_json(refinement_response.content)
+            refined_plan = agent.output_parser.parse_json(refinement_response.content)
+            current_plan = handler.merge_refined_plan(payload, current_plan, refined_plan, validation_result)
 
         latency_sec = time.perf_counter() - start_time
         logger.info("stage_completed", latency_sec=round(latency_sec, 4))
