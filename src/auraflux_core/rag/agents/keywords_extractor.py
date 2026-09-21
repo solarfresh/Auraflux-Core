@@ -309,7 +309,6 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             tool_name="triple_processor",
             tool_args={
                 "triples": raw_incoming_triples,
-                "excerpt_text": excerpt_text
             }
         )
 
@@ -328,7 +327,10 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         # Step 2: Inspect candidate triples via triple_rule_checker
         check_res = await self.tool_executor.run(
             tool_name="triple_rule_checker",
-            tool_args={"triples": processed_triples}
+            tool_args={
+                "triples": processed_triples,
+                "excerpt_text": excerpt_text
+            }
         )
 
         raw_content = getattr(check_res, "content", check_res)
