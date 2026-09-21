@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 import pytest
 
 from auraflux_core.core.schemas.tools import ToolConfig
@@ -9,6 +11,19 @@ def checker_tool():
     """Fixture to initialize TripleRuleCheckerTool with default configurations."""
     return TripleRuleCheckerTool(config=ToolConfig())
 
+def create_triple(subject: str, predicate: str, obj: str) -> Dict[str, Any]:
+    """Helper function to create a minimal valid triple dictionary."""
+    return {
+        "subject": subject,
+        "predicate": predicate,
+        "object": obj,
+        "subject_resolved": None,
+        "data_target": None,
+        "metric_name": None,
+        "normalized_value": None,
+        "unit": None,
+        "operator": None,
+    }
 
 # ==============================================================================
 # 1. Inspect Single Triple Test Cases
@@ -276,3 +291,171 @@ def test_anomaly_orphan_unit_without_core_metric(checker_tool):
     reasons = checker_tool.inspect_single_triple(flawed_triple)
     assert len(reasons) > 0, "Expected rule checker to flag orphan unit/operator without core metric, but none found."
     assert any("Inconsistent metric data" in r for r in reasons)
+
+# =============================================================================
+# Bilingual Unit Tests for SPO Grounding & Sequence Rules
+# =============================================================================
+
+class TestTripleSPORules:
+
+    def test_valid_spo_sequence_english(self, checker_tool):
+        """Tests standard Subject-Predicate-Object order in English."""
+        excerpt = "Apple Inc. announced the new iPhone 16 at the annual keynote event."
+        triple = create_triple(
+            subject="Apple Inc.",
+            predicate="announced",
+            obj="iPhone 16"
+        )
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 1
+        assert len(result.flagged_triples) == 0
+        assert not result.has_flagged
+
+    def test_valid_spo_sequence_chinese(self, checker_tool):
+        """Tests standard Subject-Predicate-Object order in Traditional Chinese."""
+        excerpt = "台積電在南部科學園區興建了最先進的二奈米晶圓廠。"
+        triple = create_triple(
+            subject="台積電",
+            predicate="興建了",
+            obj="二奈米晶圓廠"
+        )
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 1
+        assert len(result.flagged_triples) == 0
+
+    def test_valid_sop_passive_sequence_english(self, checker_tool):
+        """Tests valid passive/inverted Subject-Object-Predicate order in English."""
+        excerpt = "The fiscal budget for 2025 was approved by the board of directors."
+        triple = create_triple(
+            subject="The fiscal budget",
+            predicate="approved",
+            obj="board of directors"
+        )
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 1
+        assert len(result.flagged_triples) == 0
+
+    def test_valid_sop_passive_sequence_chinese(self, checker_tool):
+        """Tests valid passive/inverted Subject-Object-Predicate order in Traditional Chinese."""
+        excerpt = "這項全新的AI服務由專案小組於上個月成功研發。"
+        triple = {
+            "subject": "這項全新的AI服務",
+            "subject_resolved": "全新的AI服務",
+            "predicate": "研發",
+            "object": "專案小組",
+            "data_target": None,
+            "metric_name": None,
+            "normalized_value": None,
+            "unit": None,
+            "operator": None,
+        }
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 1
+        assert len(result.flagged_triples) == 0
+
+    def test_invalid_out_of_order_sequence_english(self, checker_tool):
+        """
+        Tests flagging when components appear in wrong order (e.g. Predicate before Subject).
+        In this excerpt, 'launched' appears BEFORE 'Google'.
+        """
+        excerpt = "Recently launched products include Pixel 9, which Google engineered with AI."
+        triple = create_triple(
+            subject="Google",
+            predicate="launched",
+            obj="Pixel 9"
+        )
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 0
+        assert len(result.flagged_triples) == 1
+
+        flagged_reasons = result.flagged_triples[0].flag_reasons
+        assert any("do not follow a valid sequence order" in reason for reason in flagged_reasons)
+
+    def test_invalid_out_of_order_sequence_chinese(self, checker_tool):
+        """
+        Tests flagging when components appear in inverted order not matching SPO or SOP.
+        Here predicate '出版' appears before subject '聯經出版'.
+        """
+        excerpt = "隆重出版這本歷史巨著的是著名的聯經出版公司。"
+        triple = create_triple(
+            subject="聯經出版公司",
+            predicate="出版",
+            obj="歷史巨著"
+        )
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 0
+        assert len(result.flagged_triples) == 1
+
+        flagged_reasons = result.flagged_triples[0].flag_reasons
+        assert any("do not follow a valid sequence order" in reason for reason in flagged_reasons)
+
+    def test_missing_component_in_excerpt_english(self, checker_tool):
+        """Tests flagging when a triple entity is completely absent from the excerpt."""
+        excerpt = "Microsoft acquired GitHub to empower developers globally."
+        triple = create_triple(
+            subject="Microsoft",
+            predicate="acquired",
+            obj="GitLab"  # Absent entity
+        )
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 0
+        assert len(result.flagged_triples) == 1
+
+        flagged_reasons = result.flagged_triples[0].flag_reasons
+        assert any("Object 'GitLab' is not found" in reason for reason in flagged_reasons)
+
+    def test_missing_component_in_excerpt_chinese(self, checker_tool):
+        """Tests flagging when a Chinese predicate is completely absent from the excerpt."""
+        excerpt = "華碩電腦在台北發表了最新的雙螢幕筆記型電腦。"
+        triple = create_triple(
+            subject="華碩電腦",
+            predicate="收購",  # Absent predicate (text has '發表了')
+            obj="筆記型電腦"
+        )
+
+        result = checker_tool.inspect_triples(triples=[triple], excerpt_text=excerpt)
+
+        assert len(result.clean_triples) == 0
+        assert len(result.flagged_triples) == 1
+
+        flagged_reasons = result.flagged_triples[0].flag_reasons
+        assert any("Predicate '收購' is not found" in reason for reason in flagged_reasons)
+
+    def test_multiple_triples_mixed_results(self, checker_tool):
+        """Tests processing multiple triples simultaneously where some pass and some fail."""
+        excerpt = "NVIDIA developed CUDA technology to accelerate high performance computing."
+
+        valid_triple = create_triple(
+            subject="NVIDIA",
+            predicate="developed",
+            obj="CUDA technology"
+        )
+        invalid_triple = create_triple(
+            subject="CUDA technology",
+            predicate="developed",
+            obj="NVIDIA"  # Out of order (Object before Subject in text)
+        )
+
+        result = checker_tool.inspect_triples(
+            triples=[valid_triple, invalid_triple],
+            excerpt_text=excerpt
+        )
+
+        assert result.total_count == 2
+        assert len(result.clean_triples) == 1
+        assert len(result.flagged_triples) == 1
+        assert result.has_flagged is True

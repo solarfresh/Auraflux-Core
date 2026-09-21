@@ -186,11 +186,6 @@ class SentencePatternCollection(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-import re
-from typing import List, Pattern
-from pydantic import BaseModel, ConfigDict, Field
-
-
 class TripleCheckerPatternCollection(BaseModel):
     """
     Strongly-typed collection of compiled Regular Expressions for TripleRuleCheckerTool.
@@ -224,6 +219,23 @@ class TripleCheckerPatternCollection(BaseModel):
         ),
         description="Matches predicates containing weak verbs or embedded personal object fillers."
     )
+
+    @staticmethod
+    def build_spo_patterns(subject: str, predicate: str, obj: str) -> List[Pattern]:
+        """
+        Dynamically constructs compiled regex patterns for Subject-Predicate-Object (S-P-O)
+        and Subject-Object-Predicate (S-O-P) order verification without distance constraints.
+        """
+        s_esc = re.escape(subject)
+        p_esc = re.escape(predicate)
+        o_esc = re.escape(obj)
+
+        # Standard SPO: Subject -> Predicate -> Object
+        spo_regex = re.compile(rf"{s_esc}.*?{p_esc}.*?{o_esc}", re.IGNORECASE | re.DOTALL)
+        # Inverted / Passive SOP: Subject -> Object -> Predicate
+        sop_regex = re.compile(rf"{s_esc}.*?{o_esc}.*?{p_esc}", re.IGNORECASE | re.DOTALL)
+
+        return [spo_regex, sop_regex]
 
 
 # Default singleton instance for general usage

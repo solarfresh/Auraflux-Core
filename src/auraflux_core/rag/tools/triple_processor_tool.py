@@ -206,6 +206,7 @@ class TripleRuleCheckerTool(BaseTool):
     async def run(
         self,
         triples: List[Dict[str, Any]],
+        excerpt_text: Optional[str] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -214,11 +215,12 @@ class TripleRuleCheckerTool(BaseTool):
         TripleRuleCheckerOutput Pydantic model into a JSON-serializable dictionary.
         """
         self.logger.info(f"Inspecting {len(triples)} semantic triples for rule violations.")
-        inspection_result: TripleRuleCheckerOutput = self.inspect_triples(triples)
+        inspection_result: TripleRuleCheckerOutput = self.inspect_triples(triples, excerpt_text=excerpt_text)
         return inspection_result.model_dump(by_alias=True)
 
     def inspect_triples(
-        self, triples: List[Dict[str, Any]]
+        self, triples: List[Dict[str, Any]],
+        excerpt_text: Optional[str] = None
     ) -> TripleRuleCheckerOutput:
         """
         Orchestrates triple validation by delegating to filter_triples and
@@ -231,7 +233,7 @@ class TripleRuleCheckerTool(BaseTool):
             TripleRuleCheckerOutput: Strongly-typed inspection result containing
             clean triples, flagged triples, and execution metrics.
         """
-        clean_triples, flagged_triples = self.filter_triples(triples)
+        clean_triples, flagged_triples = self.filter_triples(triples, excerpt_text=excerpt_text)
 
         return TripleRuleCheckerOutput(
             clean_triples=clean_triples,
@@ -241,7 +243,11 @@ class TripleRuleCheckerTool(BaseTool):
             flagged_count=len(flagged_triples)
         )
 
-    def inspect_single_triple(self, triple: Dict[str, Any]) -> List[str]:
+    def inspect_single_triple(
+        self,
+        triple: Dict[str, Any],
+        excerpt_text: Optional[str] = None
+    ) -> List[str]:
         """
         Inspects a single triple using a clean, modular validation pipeline.
         """
@@ -258,6 +264,8 @@ class TripleRuleCheckerTool(BaseTool):
         reasons.extend(self._check_anaphora_rules(item))
         reasons.extend(self._check_operator_rules(item))
         reasons.extend(self._check_metric_rules(item))
+        if excerpt_text:
+            reasons.extend(self._check_excerpt_grounding(item, excerpt_text))
 
         return reasons
 
@@ -324,6 +332,40 @@ class TripleRuleCheckerTool(BaseTool):
             ]
 
         return []
+
+    def _check_excerpt_grounding(self, item: TripleItem, excerpt_text: str) -> List[str]:
+        """
+        Validates whether the triple elements (subject, predicate, object) exist
+        and appear in a valid contextual order/sequence within the source excerpt.
+        """
+        reasons: List[str] = []
+        excerpt = excerpt_text.strip()
+        if not excerpt:
+            return []
+
+        # If subject is anaphoric and has been resolved, check groundings against raw subject
+        subject = str(item.subject or "").strip()
+        predicate = str(item.predicate or "").strip()
+        obj = str(item.object or "").strip()
+
+        # 1. Individual existence check
+        for role, text in [("Subject", subject), ("Predicate", predicate), ("Object", obj)]:
+            if text and text.lower() not in excerpt.lower():
+                reasons.append(f"{role} '{text}' is not found in the provided excerpt_text.")
+
+        if reasons:
+            # Early exit if basic entity presence check fails
+            return reasons
+
+        # 2. Sequential occurrence check without character distance constraint
+        sequence_patterns = self.checker_patterns.build_spo_patterns(subject, predicate, obj)
+        if not any(pattern.search(excerpt) for pattern in sequence_patterns):
+            reasons.append(
+                f"Triple components ('{subject}', '{predicate}', '{obj}') do not follow "
+                f"a valid sequence order (S-P-O or S-O-P) within the provided excerpt_text."
+            )
+
+        return reasons
 
     def _check_operator_rules(self, item: TripleItem) -> List[str]:
         """Validates operator whitelist restrictions."""
@@ -393,7 +435,9 @@ class TripleRuleCheckerTool(BaseTool):
         return reasons
 
     def filter_triples(
-        self, triples: List[Dict[str, Any]]
+        self,
+        triples: List[Dict[str, Any]],
+        excerpt_text: Optional[str] = None
     ) -> Tuple[List[TripleItem], List[FlaggedTripleItem]]:
         """
         Internal helper method to inspect and partition input triples into clean
@@ -403,7 +447,7 @@ class TripleRuleCheckerTool(BaseTool):
         flagged_triples: List[FlaggedTripleItem] = []
 
         for item in triples:
-            reasons = self.inspect_single_triple(item)
+            reasons = self.inspect_single_triple(item, excerpt_text=excerpt_text)
 
             if reasons:
                 flagged_data = {**item, "_flag_reasons": reasons}
@@ -456,10 +500,14 @@ class TripleRuleCheckerTool(BaseTool):
         )
 
     def get_parameters(self) -> Dict[str, Any]:
-        """Generates JSON Schema parameter specs fully aligned with TripleItem definition."""
+        """Generates JSON Schema parameter specs fully aligned with Tool execution parameters."""
         return {
             "type": "object",
             "properties": {
+                "excerpt_text": {
+                    "type": "string",
+                    "description": "The full source text excerpt from which all candidate triples were extracted."
+                },
                 "triples": {
                     "type": "array",
                     "description": "A list of bound semantic triple dictionaries containing entities, predicates, and metric metadata.",
@@ -509,5 +557,5 @@ class TripleRuleCheckerTool(BaseTool):
                     }
                 }
             },
-            "required": ["triples"]
+            "required": ["triples", "excerpt_text"]
         }
