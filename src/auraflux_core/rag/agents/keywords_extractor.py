@@ -136,7 +136,9 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
 
             # Step 1: Execute incremental triple processing & rule inspection
             if "triples" in plan_output and isinstance(plan_output["triples"], list) and self.tool_executor:
-                has_flagged, flagged_reasons, check_data = await self._process_incremental_triples(plan_output)
+                has_flagged, flagged_reasons, check_data = await self._process_incremental_triples(
+                    payload, plan_output
+                )
 
             # Step 2: Clean tags
             if "tags" in plan_output and isinstance(plan_output["tags"], list):
@@ -283,7 +285,11 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
 
         return merged_plan
 
-    async def _process_incremental_triples(self, plan_output: Dict[str, Any]) -> Tuple[bool, List[str], Dict[str, Any]]:
+    async def _process_incremental_triples(
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any]
+    ) -> Tuple[bool, List[str], Dict[str, Any]]:
         """
         Helper method dedicated to handling incremental triple processing and revision.
         Cleans incoming triples, inspects rule violations via TripleRuleCheckerTool,
@@ -292,12 +298,16 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         Returns:
             Tuple[bool, List[str]]: (has_flagged, combined_flag_reasons)
         """
+        chunk_text = payload.get("chunk_text") or payload.get("text", "")
         raw_incoming_triples = plan_output.get("triples", [])
 
         # Step 1: Clean and split enumerated objects via triple_processor
         processed_res = await self.tool_executor.run(
             tool_name="triple_processor",
-            tool_args={"triples": raw_incoming_triples}
+            tool_args={
+                "triples": raw_incoming_triples,
+                "excerpt_text": chunk_text
+            }
         )
 
         raw_processed = getattr(processed_res, "content", processed_res)

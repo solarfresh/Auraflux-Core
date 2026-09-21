@@ -64,7 +64,8 @@ async def test_process_incremental_triples_success_with_flagged_data(
 
     # 2. Act
     has_flagged, reasons, check_data = await mock_extract_keywords_agent._process_incremental_triples(
-        plan_output
+        payload={},
+        plan_output=plan_output
     )
 
     # 3. Assert
@@ -108,7 +109,8 @@ async def test_process_incremental_triples_deduplication(
 
     # 2. Act
     has_flagged, reasons, check_data = await mock_extract_keywords_agent._process_incremental_triples(
-        plan_output
+        payload={},
+        plan_output=plan_output
     )
 
     # 3. Assert
@@ -162,7 +164,8 @@ async def test_incremental_triples_total_count_and_deduplication(
 
     # 2. Act: Step 1 Inspection
     has_flagged, reasons, check_data = await mock_extract_keywords_agent._process_incremental_triples(
-        plan_output
+        payload={},
+        plan_output=plan_output
     )
 
     validation_result = ValidationResult(
@@ -243,7 +246,8 @@ async def test_incremental_triples_count_with_flagged_repair(
 
     # Act 1: Initial Inspection (1 clean triple, 1 flagged triple)
     has_flagged, reasons, check_data = await mock_extract_keywords_agent._process_incremental_triples(
-        plan_output
+        payload={},
+        plan_output=plan_output
     )
 
     validation_result = ValidationResult(
