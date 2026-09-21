@@ -183,14 +183,17 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             )
 
     def build_plan_refinement_messages(
-        self, payload: Dict[str, Any], flawed_output: Dict[str, Any], validation_result: Any
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any], validation_result: Any
     ) -> Optional[List[Message]]:
         """
         Stage 1.5 Reflection Prompt Hook:
         Constructs refinement messages specifically targeting flagged triples for Pass 2 repair.
         If no flagged triples exist, returns None to bypass Pass 2 execution.
         """
-        flagged_triples = flawed_output.get("flagged_triples", [])
+        flagged_triples = []
+        if hasattr(validation_result, "metadata") and isinstance(validation_result.metadata, dict):
+            flagged_triples = validation_result.metadata.get("flagged_triples", [])
+
         if not flagged_triples:
             return None
 
