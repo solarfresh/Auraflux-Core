@@ -35,5 +35,6 @@ class AgentConfig(BaseModel):
     tool_execution_strategy: Literal['NONE', 'DIRECT', 'REFLECTIVE'] = 'NONE'
 
     turn_limit: int = 100
+    max_refine_retries: int = 0
     max_tokens: NonNegativeInt = 4096
     temperature: float = 0.7

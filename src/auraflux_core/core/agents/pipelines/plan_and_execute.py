@@ -188,8 +188,12 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         logger.info("stage_started")
 
         handler = cast(PlanAndExecuteHandler, agent)
-        max_retries = payload.get("max_refine_retries", 1)
         current_plan = initial_plan
+        max_retries = getattr(
+            getattr(agent, "config", None),
+            "max_refine_retries",
+            payload.get('max_refine_retries', 0)
+        )
 
         for attempt in range(max_retries + 1):
             validation_result = await handler.inspect_plan_output(payload, current_plan)
