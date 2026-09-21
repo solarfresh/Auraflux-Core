@@ -89,14 +89,14 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
                 )
 
         # --- Safe Fallback: User Prompt Only ---
-        chunk_text = payload.get("chunk_text") or payload.get("text", "")
+        excerpt_text = payload.get("excerpt_text")
 
         user_content = (
             "[TASK: INITIAL EXTRACTION]\n\n"
             "Please analyze the following source text chunk and extract concise domain keywords (tags) "
             "and structured semantic triples (triples) according to the system extraction rules.\n\n"
             "### SOURCE TEXT CHUNK\n"
-            f"{chunk_text}\n\n"
+            f"{excerpt_text}\n\n"
             "### REQUIRED OUTPUT FORMAT (JSON)\n"
             "CRITICAL: Your output MUST be a SINGLE JSON OBJECT containing two root keys: 'triples' and 'tags'. "
             "DO NOT return a top-level JSON Array/List [].\n\n"
@@ -195,14 +195,14 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             return None
 
         # Extract raw input text chunk from payload
-        chunk_text = payload.get("chunk_text") or payload.get("text", "")
+        excerpt_text = payload.get("excerpt_text")
 
         user_content = (
             "[TASK: REFLECTION & REFINEMENT]\n\n"
             "The previous extraction generated triple(s) that failed our Knowledge Graph quality inspection rules. "
             "Review the localized context text below and fix ONLY the flagged triple(s).\n\n"
             "### LOCALIZED CONTEXT TEXT\n"
-            f"{chunk_text}\n\n"
+            f"{excerpt_text}\n\n"
             "### FLAGGED TRIPLES TO REPAIR\n"
             "The following triples failed validation rules. Repair each item based on its violation reasons (`_flag_reasons`):\n"
             f"{flagged_triples}\n\n"
@@ -298,7 +298,7 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
         Returns:
             Tuple[bool, List[str]]: (has_flagged, combined_flag_reasons)
         """
-        chunk_text = payload.get("chunk_text") or payload.get("text", "")
+        excerpt_text = payload.get("excerpt_text")
         raw_incoming_triples = plan_output.get("triples", [])
 
         # Step 1: Clean and split enumerated objects via triple_processor
@@ -306,7 +306,7 @@ class ExtractKeywordsAgent(BaseAgent, PlanAndExecuteHandler):
             tool_name="triple_processor",
             tool_args={
                 "triples": raw_incoming_triples,
-                "excerpt_text": chunk_text
+                "excerpt_text": excerpt_text
             }
         )
 
