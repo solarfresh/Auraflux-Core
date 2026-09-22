@@ -1,6 +1,6 @@
 from auraflux_core.core.messages.formatter import PromptFormatter
 from auraflux_core.core.schemas.messages import (Message, PromptConfig,
-                                                 PromptSpec)
+                                                 StageSpec, SystemPromptSpec)
 
 
 class TestPromptFormatter:
@@ -10,7 +10,7 @@ class TestPromptFormatter:
         """Verify successful resolution and formatting of system message from PromptConfig."""
         config = mock_agent_config_factory()
         config.prompt_config = PromptConfig(
-            system=PromptSpec(templates={"default": "System Prompt: {role}"})
+            system=SystemPromptSpec(templates={"default": "System Prompt: {role}"})
         )
         formatter = PromptFormatter(config=config)
 
@@ -30,7 +30,7 @@ class TestPromptFormatter:
         config = mock_agent_config_factory(lang="zh-TW")
         config.prompt_config = PromptConfig(
             stages={
-                "planning": PromptSpec(
+                "planning": StageSpec(
                     templates={
                         "default": "Analyze text: {text}",
                         "zh-TW": "分析文本：{text}",
@@ -54,7 +54,7 @@ class TestPromptFormatter:
         config = mock_agent_config_factory(lang="ja-JP")
         config.prompt_config = PromptConfig(
             stages={
-                "planning": PromptSpec(
+                "planning": StageSpec(
                     templates={"default": "Analyze text: {text}"}
                 )
             }
