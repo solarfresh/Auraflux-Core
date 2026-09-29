@@ -6,6 +6,7 @@ import pytest
 from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.agents.pipelines.base import BaseAgentPipeline
 from auraflux_core.core.schemas.agents import AgentConfig
+from auraflux_core.core.schemas.messages import PromptConfig, StageSpec
 from auraflux_core.core.tools.base_tool import BaseTool
 
 
@@ -45,7 +46,19 @@ def concrete_agent_factory():
 @pytest.fixture
 def mock_agent_config() -> AgentConfig:
     """Provides a default MockAgentConfig instance for unit tests."""
-    return MockAgentConfig()
+    stage_spec = StageSpec(
+        template_variables={"dummy": "description"},
+        templates={"en": "some template"}
+    )
+    object.__setattr__(stage_spec, "get_template", MagicMock(return_value=None))
+
+    prompt_config = PromptConfig(
+        stages={
+            "stage_without_lang_template": stage_spec
+        }
+    )
+
+    return MockAgentConfig(prompt_config=prompt_config)
 
 
 @pytest.fixture
