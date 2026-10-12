@@ -71,7 +71,6 @@ DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_TEMPLATE = (
     "}"
 )
 
-# 1. Initial Plan Extraction JSON Schema
 DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",

@@ -4,22 +4,21 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from auraflux_core.alignment.objective_claim.agents import ObjectiveClaimAgent
-from auraflux_core.alignment.objective_claim.schemas import \
-    ObjectiveClaimVerdict
+from auraflux_core.alignment.objective_claim.schemas import (
+    ObjectiveClaimAgentConfig, ObjectiveClaimVerdict)
 from auraflux_core.core.schemas.messages import Message
 
 
 @pytest.fixture
 def agent():
     """Fixture to instantiate ObjectiveClaimAgent with mocked dependencies."""
-    mock_config = MagicMock()
-    mock_config.name = "ObjectiveClaimAgent"
-    mock_config.pipeline_name = "plan_and_execute"
-    mock_config.language = "zh"
-    mock_config.llm.provider = "openai"
-    mock_config.llm.model = "gpt-4o"
-    mock_config.llm.temperature = 0.0
-    mock_config.llm.max_tokens = 2000
+    mock_config = ObjectiveClaimAgentConfig(
+        name="ObjectiveClaimAgent",
+        model="gpt-4o",
+        provider="openai",
+        pipeline_name="plan_and_execute",
+        lang="zh",
+    )
 
     mock_client_manager = MagicMock()
 

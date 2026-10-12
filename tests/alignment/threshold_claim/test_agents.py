@@ -5,21 +5,20 @@ import pytest
 
 from auraflux_core.alignment.threshold_claim.agents import ThresholdClaimAgent
 from auraflux_core.alignment.threshold_claim.schemas import \
-    ThresholdClaimVerdict
+    ThresholdClaimVerdict, ThresholdClaimAgentConfig
 from auraflux_core.core.schemas.messages import Message
 
 
 @pytest.fixture
 def agent():
     """Fixture to instantiate ThresholdClaimAgent with mocked dependencies."""
-    mock_config = MagicMock()
-    mock_config.name = "ThresholdClaimAgent"
-    mock_config.pipeline_name = "plan_and_execute"
-    mock_config.language = "zh"
-    mock_config.llm.provider = "openai"
-    mock_config.llm.model = "gpt-4o"
-    mock_config.llm.temperature = 0.0
-    mock_config.llm.max_tokens = 2000
+    mock_config = ThresholdClaimAgentConfig(
+        name="ObjectiveClaimAgent",
+        model="gpt-4o",
+        provider="openai",
+        pipeline_name="plan_and_execute",
+        lang="zh",
+    )
 
     mock_client_manager = MagicMock()
 
