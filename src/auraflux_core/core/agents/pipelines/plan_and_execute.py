@@ -22,12 +22,29 @@ class PlanAndExecuteHandler(ABC):
     Decouples stage-specific contracts and validation logic from BaseAgent.
     """
 
-    @abstractmethod
-    def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
+    PLAN_STAGE_KEY: str = "plan"
+    PLAN_REFINE_STAGE_KEY: str = "plan_refinement"
+    SYNTHESIS_STAGE_KEY: str = "synthesis"
+
+    def get_plan_context(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Hook for extracting variables needed by the planning stage template."""
+        return payload
+
+    def build_plan_messages(
+        self,
+        payload: Dict[str, Any],
+        agent: "BaseAgent"
+    ) -> List[Message]:
         """
         Stage 1: Constructs initial messages for intent planning or extraction.
         """
-        pass
+        context = self.get_plan_context(payload)
+        stage_message = agent.format_stage_message(
+            stage_name=self.PLAN_STAGE_KEY,
+            **context
+        )
+
+        return [stage_message]
 
     async def inspect_plan_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any]
@@ -45,8 +62,21 @@ class PlanAndExecuteHandler(ABC):
             reasons = []
         return DefaultValidationResult()
 
+    def get_plan_refinement_context(
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        validation_result: ValidationResult,
+    ) -> Optional[Dict[str, Any]]:
+        """Hook for extracting variables for plan refinement template. Return None to skip."""
+        return None
+
     def build_plan_refinement_messages(
-        self, payload: Dict[str, Any], plan_output: Dict[str, Any], validation_result: Any
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        validation_result: ValidationResult,
+        agent: "BaseAgent",
     ) -> Optional[List[Message]]:
         """
         Stage 1.5 Reflection Prompt Hook.
@@ -57,7 +87,27 @@ class PlanAndExecuteHandler(ABC):
         validation reasons on the plan output and stops the loop immediately for
         this attempt, instead of spinning through remaining retries.
         """
-        return None
+        context = self.get_plan_refinement_context(payload, plan_output, validation_result)
+        if context is None:
+            return None
+
+        try:
+            refine_message = agent.format_stage_message(
+                stage_name=self.PLAN_REFINE_STAGE_KEY,
+                **context
+            )
+            return [refine_message]
+        except ValueError as err:
+            agent_name = getattr(agent, "name", agent.__class__.__name__)
+            logger.warning(
+                "plan_refinement_skipped",
+                agent_name=agent_name,
+                stage_name=self.PLAN_REFINE_STAGE_KEY,
+                error=str(err),
+                exc_info=True,
+            )
+
+            return None
 
     def merge_refined_plan(
         self,
@@ -84,14 +134,47 @@ class PlanAndExecuteHandler(ABC):
         """
         pass
 
-    @abstractmethod
+    def get_synthesis_context(
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message]
+    ) -> Dict[str, Any]:
+        """
+        Hook for extracting and structuring template context variables
+        required by the synthesis stage prompt template.
+
+        Args:
+            payload: The initial input payload passed to the pipeline.
+            plan_output: The parsed output generated from the planning stage.
+            tool_results: Execution results collected from Stage 2 tool workflows.
+
+        Returns:
+            Dict[str, Any]: Key-value mapping consumed by PromptFormatter.
+        """
+        # Default context structure provided to the prompt template renderer
+        return {
+            "payload": payload,
+            "plan_output": plan_output,
+            "tool_results": tool_results,
+        }
+
     def build_synthesis_messages(
-        self, payload: Dict[str, Any], plan_output: Dict[str, Any], tool_results: List[Message]
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message],
+        agent: "BaseAgent",
     ) -> List[Message]:
         """
         Stage 3: Constructs final synthesis and report generation messages.
         """
-        pass
+        context = self.get_synthesis_context(payload, plan_output, tool_results)
+        stage_message = agent.format_stage_message(
+            stage_name=self.SYNTHESIS_STAGE_KEY,
+            **context
+        )
+        return [stage_message]
 
     async def validate_synthesis_output(
         self, payload: Dict[str, Any], synth_output: str, tool_results: List[Message]
@@ -170,7 +253,7 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         logger.info("stage_started")
 
         handler = cast(PlanAndExecuteHandler, agent)
-        plan_messages = handler.build_plan_messages(payload)
+        plan_messages = handler.build_plan_messages(payload, agent)
         plan_response = await agent.generate(plan_messages)
         parsed_plan = agent.output_parser.parse_json(plan_response.content)
 
@@ -210,7 +293,7 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
             )
 
             refinement_messages = handler.build_plan_refinement_messages(
-                payload, current_plan, validation_result
+                payload, current_plan, validation_result, agent
             )
 
             # Stop Criteria 2: Handler has no repair path
@@ -277,10 +360,7 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         logger.info("stage_started")
 
         handler = cast(PlanAndExecuteHandler, agent)
-        synth_messages = handler.build_synthesis_messages(payload, plan_output, tool_results)
-        if not synth_messages:
-            return ""
-
+        synth_messages = handler.build_synthesis_messages(payload, plan_output, tool_results, agent)
         synth_response = await agent.generate(synth_messages)
 
         latency_sec = time.perf_counter() - start_time

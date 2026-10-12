@@ -178,3 +178,34 @@ class BaseAgent(ABC):
         Delegates control flow execution directly to the bound Pipeline strategy.
         """
         return await self.pipeline.execute(agent=self, payload=payload)
+
+    def get_prompt_formatter(self) -> Any:
+        """
+        Safely retrieves the agent's formatter.
+        Raises ValueError if formatter is missing or not configured.
+        """
+        if not self.prompt_formatter:
+            raise ValueError(f"Agent '{self.name}' does not have a valid 'formatter' configured.")
+        return self.prompt_formatter
+
+    def format_stage_message(self, stage_name: str, **kwargs) -> Message:
+        """
+        Formats a stage user message directly via PromptFormatter.
+        Raises ValueError if rendered message is empty or missing.
+        """
+        if not self.prompt_formatter:
+            raise ValueError(f"Agent '{self.name}' does not have a valid PromptFormatter.")
+
+        stage_message = self.prompt_formatter.format_stage_message(
+            agent_name=self.name,
+            stage_name=stage_name,
+            **kwargs
+        )
+
+        if not stage_message or not stage_message.content:
+            raise ValueError(
+                f"Failed to render stage prompt for Agent '{self.name}', Stage '{stage_name}'. "
+                f"Template is missing in PromptConfig or rendered to an empty string."
+            )
+
+        return stage_message

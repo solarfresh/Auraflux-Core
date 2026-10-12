@@ -33,7 +33,9 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
     def name(self) -> str:
         return "MockPlanAgent"
 
-    def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
+    def build_plan_messages(
+        self, payload: Dict[str, Any], agent: BaseAgent
+    ) -> List[Message]:
         return [Message(role="user", content="Plan stage prompt", name=self.name)]
 
     async def execute_tool_workflow(
@@ -49,7 +51,11 @@ class MockAgentWithHandler(BaseAgent, PlanAndExecuteHandler):
         return []
 
     def build_synthesis_messages(
-        self, payload: Dict[str, Any], plan_output: Dict[str, Any], tool_results: List[Message]
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message],
+        agent: BaseAgent,
     ) -> List[Message]:
         evidence = tool_results[0].content if tool_results else "No evidence"
         return [

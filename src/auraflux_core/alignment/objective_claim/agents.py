@@ -23,99 +23,24 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
        a deterministic tool execution workflow, and output parsing to PlanAndExecutePipeline[cite: 11].
     """
 
-    def get_system_message_map(self) -> Dict[str, str]:
-        return {
-            "zh": (
-                "你是一名客觀聲明稽核專家（Objective Claim Audit Specialist）。\n"
-                "你的核心任務是針對傳入命題進行正交診斷分析（Orthogonal Diagnostics）：\n"
-                "1. 剖析隱性前提（資源授權、團隊能力與因果依賴）。\n"
-                "2. 實施「標準與量化診斷」，剝離主觀形容與抽象描述，提取明確可稽核的數據指標與所需產物類型（Required Artifact Types, 如 Log、 Commit、驗收報告）。\n"
-                "3. 檢測足跡衝突（Footprint Conflicts）並構建精準的事證檢索計畫。\n"
-                "在驗證階段，你必須嚴格基於檢索到的客觀佐證進行事實導向的判決（VERIFIED / PARTIALLY_VERIFIED / UNSUPPORTED），絕不允許主觀臆測。"
-            ),
-            "default": (
-                "You are an Objective Claim Audit Specialist responsible for orthogonal diagnostic analysis "
-                "and evidence-based verification of input claims.\n"
-                "Your core responsibilities:\n"
-                "1. Analyze implicit premises (resource authorization, capability assumptions, and causality).\n"
-                "2. Execute standardization and quantification diagnostics to strip subjective phrasing and extract audit-ready metrics alongside required artifact types (e.g., logs, commits, spec docs).\n"
-                "3. Detect footprint conflicts and formulate targeted evidence retrieval strategies.\n"
-                "During verification, you must strictly evaluate claims against retrieved objective evidence "
-                "to render fact-based determinations (VERIFIED / PARTIALLY_VERIFIED / UNSUPPORTED) without subjective hallucination."
-            ),
-        }
+    def get_plan_context(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+            """Extracts context variables needed for Stage 1 planning template."""
+            return {
+                "proposition_id": payload.get("proposition_id", ""),
+                "claim_text": payload.get("claim_text", "")
+            }
 
-    # =========================================================================
-    # PlanAndExecuteHandler Implementation (Domain Hooks for Pipeline)
-    # =========================================================================
+    def build_plan_messages(
+        self,
+        payload: Dict[str, Any],
+        agent: "BaseAgent"
+    ) -> List[Message]:
+        """Stage 1: Constructs user messages for LLM keyword & triple extraction.
 
-    def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
-        """Stage 1 Hook: Builds prompt to analyze claim and specify 1-to-1 targeted retrieval fields."""
-        formatter = getattr(self, "prompt_formatter", None)
-        format_messages = getattr(formatter, "format_messages", None)
-        if callable(format_messages):
-            try:
-                return cast(List[Message], format_messages(payload))
-            except Exception as e:
-                logger.warning(
-                    "prompt_formatter_failed",
-                    formatter_class=formatter.__class__.__name__,
-                    error_msg=str(e),
-                )
-
-        # --- Safe Fallback Prompt ---
-        proposition_id = payload.get("proposition_id", "")
-        claim_text = payload.get("claim_text", "")
-
-        prompt = (
-            f"Proposition ID: {proposition_id}\n"
-            f"Claim: {claim_text}\n\n"
-            "Task:\n"
-            "1. Extract semantic triples (Subject -> Predicate -> Object).\n"
-            "2. Perform orthogonal diagnosis:\n"
-            "   - implicit_premises: Unstated assumptions regarding Capability, Resources, Causality, or Environment.\n"
-            "   - quantification_requirements: Clear metrics, required artifact types, and acceptance criteria.\n"
-            "   - boundary_conflicts: Potential resource or rule conflicts.\n"
-            "3. Formulate targeted retrieval queries (`queries`). Generate 1 to 2 distinct query items "
-            "tailored to specific search intents. Each item must strictly bind to ONE text field and ONE vector field:\n"
-            "   - `query_text`: The rewritten query string optimized for retrieval (MUST BE IN ENGLISH to match knowledge base).\n"
-            "   - `target_type`: The retrieval intent, chosen strictly from ['question', 'concept_title', 'concept_desc', 'evidence']:\n"
-            "       * 'question': Target underlying core questions. (text_field: 'target_question', vector_field: 'question_vector')\n"
-            "       * 'concept_title': Target specific concept names/terms. (text_field: 'concept_title', vector_field: 'concept_vector')\n"
-            "       * 'concept_desc': Target concept definitions and mechanisms. (text_field: 'concept_description', vector_field: 'concept_vector')\n"
-            "       * 'evidence': Target concrete empirical facts or evidence. (text_field: 'evidence_text', vector_field: 'evidence_vector')\n"
-            "   - `text_field`: Exactly ONE text field name from ['target_question', 'concept_title', 'concept_description', 'evidence_text'].\n"
-            "   - `vector_field`: Exactly ONE vector field name from ['question_vector', 'concept_vector', 'evidence_vector'].\n\n"
-            "CRITICAL FORMAT RULES:\n"
-            "- `query_text` MUST BE IN ENGLISH regardless of the input claim language.\n"
-            "- `quantification_requirements` MUST BE A DICTIONARY OBJECT (NOT A LIST/ARRAY).\n"
-            "- `queries` MUST BE A NON-EMPTY ARRAY containing 1 or 2 targeted query objects.\n\n"
-            "Required Output JSON Format:\n"
-            "{\n"
-            '  "triples": [\n'
-            '    {"subject": "...", "predicate": "...", "object": "..."}\n'
-            '  ],\n'
-            '  "diagnostics": {\n'
-            '    "implicit_premises": ["..."],\n'
-            '    "quantification_requirements": {\n'
-            '      "required_artifact_types": ["..."],\n'
-            '      "acceptance_criteria": "..."\n'
-            '    },\n'
-            '    "boundary_conflicts": {\n'
-            '      "has_conflict": false\n'
-            '    }\n'
-            '  },\n'
-            '  "queries": [\n'
-            '    {\n'
-            '      "target_type": "evidence",\n'
-            '      "query_text": "...",\n'
-            '      "text_field": "evidence_text",\n'
-            '      "vector_field": "evidence_vector"\n'
-            '    }\n'
-            '  ]\n'
-            "}"
-        )
-        return [Message(role="user", content=prompt, name=self.name)]
+        Attempts dynamic lookup via `prompt_formatter.format_messages`. If absent or
+        not callable, falls back to the default Stage 1 extraction user message.
+        """
+        return super().build_plan_messages(payload, agent)
 
     async def execute_tool_workflow(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any]
@@ -133,52 +58,29 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
 
         return tool_results
 
+    def get_synthesis_context(
+            self,
+            payload: Dict[str, Any],
+            plan_output: Dict[str, Any],
+            tool_results: List[Message]
+        ) -> Dict[str, Any]:
+            return {
+                "proposition_id": payload.get("proposition_id", ""),
+                "claim_text": payload.get("claim_text", ""),
+                "formatted_evidence_text": self._format_retrieved_evidence(tool_results),
+                "triples": json.dumps(plan_output.get('triples', []), ensure_ascii=False),
+                "diagnostics": json.dumps(plan_output.get('diagnostics', {}), ensure_ascii=False)
+            }
+
     def build_synthesis_messages(
-        self, payload: Dict[str, Any], plan_output: Dict[str, Any], tool_results: List[Message]
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message],
+        agent: "BaseAgent",
     ) -> List[Message]:
         """Stage 3 Hook: Extracts structured 4-layer context from tool results and injects for synthesis."""
-        proposition_id = payload.get("proposition_id", "")
-        claim_text = payload.get("claim_text", "")
-
-        formatted_evidence_text = self._format_retrieved_evidence(tool_results)
-
-        prompt = (
-            f"Proposition ID: {proposition_id}\n"
-            f"Claim: {claim_text}\n"
-            f"Extracted Claim Triples (Stage 1): {json.dumps(plan_output.get('triples', []), ensure_ascii=False)}\n"
-            f"Diagnostics (Stage 1): {json.dumps(plan_output.get('diagnostics', {}), ensure_ascii=False)}\n\n"
-            f"Retrieved Structured Core Context Evidence:\n{formatted_evidence_text}\n\n"
-            "Task:\n"
-            "1. Perform a thorough cross-examination of the Claim and Stage 1 Diagnostics against the Retrieved Evidence.\n"
-            "2. Evaluate and EXPLICITLY OUTPUT the `diagnostic_evaluation` for each diagnostic item:\n"
-            "   - `implicit_premises_eval`: Assess if the unstated assumptions are supported by evidence.\n"
-            "   - `quantification_eval`: Assess if the quantitative requirements/metrics are fully satisfied by evidence.\n"
-            "   - `boundary_conflicts_eval`: Detail whether the boundary conflicts identified in Stage 1 are resolved, mitigated, or violated by the evidence.\n"
-            "3. Determine the final `status`:\n"
-            "   - 'VERIFIED': Fully supported by evidence, all quantitative criteria met, and ALL boundary conflicts are fully resolved.\n"
-            "   - 'PARTIALLY_VERIFIED': Main claim is supported, BUT missing quantitative metrics, unfulfilled criteria, or UNRESOLVED boundary conflicts remain.\n"
-            "   - 'UNSUPPORTED': Insufficient evidence, direct factual contradiction, or major boundary conflict violation.\n"
-            "4. Fill `verification_proofs` with exact supporting quotes, locations, or triples from evidence.\n"
-            "5. Fill `compliance_gap`:\n"
-            "   - If status is 'VERIFIED': MUST be set to `null`.\n"
-            "   - If status is 'PARTIALLY_VERIFIED' or 'UNSUPPORTED': MUST be a string explicitly summarizing the gaps, unfulfilled metrics, or unresolved boundary conflicts.\n\n"
-            "CRITICAL FORMAT RULES:\n"
-            "- `diagnostic_evaluation` MUST be a nested object with text descriptions for all 3 diagnostic dimensions.\n"
-            "- `compliance_gap` MUST BE A PLAIN STRING OR `null` (NEVER AN OBJECT OR LIST).\n\n"
-            "Required Output JSON Format:\n"
-            "{\n"
-            '  "diagnostic_evaluation": {\n'
-            '    "implicit_premises_eval": "Evaluation of assumptions against evidence...",\n'
-            '    "quantification_eval": "Evaluation of metrics and criteria against evidence...",\n'
-            '    "boundary_conflicts_eval": "Evaluation of boundary conflicts (whether resolved or remaining as gaps)..."\n'
-            '  },\n'
-            '  "status": "VERIFIED" | "PARTIALLY_VERIFIED" | "UNSUPPORTED",\n'
-            '  "verification_proofs": ["..."],\n'
-            '  "compliance_gap": "Brief description string of missing criteria/gaps/conflicts, or null if fully verified"\n'
-            "}"
-        )
-
-        return [Message(role="user", content=prompt, name=self.name)]
+        return super().build_synthesis_messages(payload, plan_output, tool_results, agent)
 
     def parse_final_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str

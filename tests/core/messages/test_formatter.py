@@ -1,6 +1,10 @@
+from unittest.mock import patch
+
+import pytest
+
 from auraflux_core.core.messages.formatter import PromptFormatter
 from auraflux_core.core.schemas.messages import (Message, PromptConfig,
-                                                 PromptSpec)
+                                                 StageSpec, SystemPromptSpec)
 
 
 class TestPromptFormatter:
@@ -10,7 +14,7 @@ class TestPromptFormatter:
         """Verify successful resolution and formatting of system message from PromptConfig."""
         config = mock_agent_config_factory()
         config.prompt_config = PromptConfig(
-            system=PromptSpec(templates={"default": "System Prompt: {role}"})
+            system=SystemPromptSpec(templates={"default": "System Prompt: {role}"})
         )
         formatter = PromptFormatter(config=config)
 
@@ -30,7 +34,10 @@ class TestPromptFormatter:
         config = mock_agent_config_factory(lang="zh-TW")
         config.prompt_config = PromptConfig(
             stages={
-                "planning": PromptSpec(
+                "planning": StageSpec(
+                    template_variables={
+                        "text": "The input text to be analyzed."
+                    },
                     templates={
                         "default": "Analyze text: {text}",
                         "zh-TW": "分析文本：{text}",
@@ -54,7 +61,10 @@ class TestPromptFormatter:
         config = mock_agent_config_factory(lang="ja-JP")
         config.prompt_config = PromptConfig(
             stages={
-                "planning": PromptSpec(
+                "planning": StageSpec(
+                    template_variables={
+                        "text": "The input text to be analyzed."
+                    },
                     templates={"default": "Analyze text: {text}"}
                 )
             }
@@ -69,13 +79,30 @@ class TestPromptFormatter:
         assert message.content == "Analyze text: Test Fallback"
 
     def test_format_stage_message_non_existent_stage(self, mock_agent_config):
-        """Verify safe handling and empty user message output when querying an unconfigured stage."""
+        """Verify ValueError is raised when querying an unconfigured stage to prevent invalid API calls."""
         formatter = PromptFormatter(config=mock_agent_config)
 
-        message = formatter.format_stage_message(
-            agent_name="keyword_extractor",
-            stage_name="non_existent_stage",
+        with pytest.raises(ValueError) as exc_info:
+            formatter.format_stage_message(
+                agent_name="keyword_extractor",
+                stage_name="non_existent_stage",
+            )
+
+        assert "[PromptFormatter] Stage 'non_existent_stage' is not configured in prompt_config.stages for agent 'keyword_extractor'." in str(
+            exc_info.value
         )
-        assert isinstance(message, Message)
-        assert message.role == "user"
-        assert message.content == ""
+
+    def test_format_stage_message_missing_template_for_language(self, mock_agent_config):
+        """Verify ValueError is raised when template is missing for the specified language."""
+        with patch.object(StageSpec, "get_template", return_value=None):
+            formatter = PromptFormatter(config=mock_agent_config)
+
+            with pytest.raises(ValueError) as exc_info:
+                formatter.format_stage_message(
+                    agent_name="keyword_extractor",
+                    stage_name="stage_without_lang_template",
+                )
+
+            assert "[PromptFormatter] Template not found for stage 'stage_without_lang_template'" in str(
+                exc_info.value
+            )

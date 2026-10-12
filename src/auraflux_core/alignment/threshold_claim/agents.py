@@ -23,98 +23,20 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
        two-stage workflow (RAG Retrieval -> Deterministic Calculator) without LLM hallucination[cite: 12].
     """
 
-    def get_system_message_map(self) -> Dict[str, str]:
+    def get_plan_context(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Extracts context variables needed for Stage 1 planning template."""
         return {
-            "zh": (
-                "你是一名數據門檻與量化對焦稽核專家（Threshold & Quantitative Verification Specialist）。\n"
-                "你的核心任務是針對傳入命題進行數據門檻與邊界衝突分析：\n"
-                "1. 實施「單位標準化與量化診斷」，提取明確可稽核的數據指標（如金額、期限、SLA 等）與硬性條件邊界。\n"
-                "2. 構建精準的事證檢索計畫，撈取相關基線條款。\n"
-                "在驗證階段，你必須嚴格依據精確運算的結果進行事實導向的判決（VERIFIED / VIOLATED / PARTIALLY_VERIFIED / UNSUPPORTED），絕不允許主觀臆測。"
-            ),
-            "default": (
-                "You are a Threshold & Quantitative Verification Specialist responsible for metric normalization "
-                "and boundary checking of input claims.\n"
-                "Your core responsibilities:\n"
-                "1. Perform unit normalization and quantitative diagnostics to extract precise metrics and boundary criteria.\n"
-                "2. Formulate targeted retrieval strategies to fetch relevant baseline policies or clauses.\n"
-                "During verification, you must strictly adhere to exact mathematical computation results "
-                "to render fact-based determinations (VERIFIED / VIOLATED / PARTIALLY_VERIFIED / UNSUPPORTED) without subjective hallucination."
-            ),
+            "proposition_id": payload.get("proposition_id", ""),
+            "claim_text": payload.get("claim_text", "")
         }
 
-    # =========================================================================
-    # PlanAndExecuteHandler Implementation (Domain Hooks for Pipeline)
-    # =========================================================================
-
-    def build_plan_messages(self, payload: Dict[str, Any]) -> List[Message]:
+    def build_plan_messages(
+        self,
+        payload: Dict[str, Any],
+        agent: "BaseAgent"
+    ) -> List[Message]:
         """Stage 1 Hook: Builds prompt to analyze threshold claim and extract quantitative requirements matching NormalizedMetric schema."""
-        formatter = getattr(self, "prompt_formatter", None)
-        format_messages = getattr(formatter, "format_messages", None)
-        if callable(format_messages):
-            try:
-                return cast(List[Message], format_messages(payload))
-            except Exception as e:
-                logger.warning(
-                    "prompt_formatter_failed",
-                    formatter_class=formatter.__class__.__name__,
-                    error_msg=str(e),
-                )
-
-        # --- Safe Fallback Prompt ---
-        proposition_id = payload.get("proposition_id", "")
-        claim_text = payload.get("claim_text", "")
-
-        prompt = (
-            f"Proposition ID: {proposition_id}\n"
-            f"Claim: {claim_text}\n\n"
-            "Task:\n"
-            "1. Extract semantic triples (Subject -> Predicate -> Object).\n"
-            "2. Perform quantitative threshold diagnosis:\n"
-            "   - implicit_premises: Unstated baseline assumptions or environmental factors.\n"
-            "   - quantification_requirements: Extract explicit metric targets and normalize them strictly according to NormalizedMetric schema.\n"
-            "   - boundary_conflicts: Detect potential paradoxes or mathematical boundary conflicts.\n"
-            "3. Formulate targeted retrieval queries (`queries`). Generate 1 to 2 distinct query items "
-            "tailored to fetch baseline clauses or policy rules:\n"
-            "   - `query_text`: The rewritten query string optimized for retrieval (MUST BE IN ENGLISH).\n"
-            "   - `target_type`: Chosen strictly from ['question', 'concept_title', 'concept_desc', 'evidence'].\n"
-            "   - `text_field`: Exactly ONE text field name from ['target_question', 'concept_title', 'concept_description', 'evidence_text'].\n"
-            "   - `vector_field`: Exactly ONE vector field name from ['question_vector', 'concept_vector', 'evidence_vector'].\n\n"
-            "CRITICAL FORMAT RULES:\n"
-            "- `query_text` MUST BE IN ENGLISH regardless of the input claim language.\n"
-            "- `quantification_requirements` MUST BE A LIST of NormalizedMetric objects.\n"
-            "- `queries` MUST BE A NON-EMPTY ARRAY containing 1 or 2 targeted query objects.\n\n"
-            "Required Output JSON Format:\n"
-            "{\n"
-            '  "triples": [\n'
-            '    {"subject": "...", "predicate": "...", "object": "..."}\n'
-            '  ],\n'
-            '  "diagnostics": {\n'
-            '    "implicit_premises": ["..."],\n'
-            '    "quantification_requirements": [\n'
-            '      {\n'
-            '        "raw_text": "500萬TWD",\n'
-            '        "metric_name": "budget",\n'
-            '        "normalized_value": 5000000.0,\n'
-            '        "unit": "TWD",\n'
-            '        "operator": "<="\n'
-            '      }\n'
-            '    ],\n'
-            '    "boundary_conflicts": {\n'
-            '      "has_conflict": false\n'
-            '    }\n'
-            '  },\n'
-            '  "queries": [\n'
-            '    {\n'
-            '      "target_type": "evidence",\n'
-            '      "query_text": "...",\n'
-            '      "text_field": "evidence_text",\n'
-            '      "vector_field": "evidence_vector"\n'
-            '    }\n'
-            '  ]\n'
-            "}"
-        )
-        return [Message(role="user", content=prompt, name=self.name)]
+        return super().build_plan_messages(payload, agent)
 
     async def execute_tool_workflow(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any]
@@ -187,40 +109,35 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
 
         return extracted_metrics
 
-    def build_synthesis_messages(
-        self, payload: Dict[str, Any], plan_output: Dict[str, Any], tool_results: List[Message]
-    ) -> List[Message]:
-        """Stage 3 Hook: Synthesizes deterministic calculator results and evidence into a structured ThresholdClaimVerdict."""
-        proposition_id = payload.get("proposition_id", "")
-        claim_text = payload.get("claim_text", "")
-
+    def get_synthesis_context(
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message]
+    ) -> Dict[str, Any]:
+        quantification_requirements = json.dumps(
+            plan_output.get('diagnostics', {}).get('quantification_requirements', []),
+            ensure_ascii=False
+        )
         calc_summary, formatted_evidence_text = self._format_retrieved_evidence(tool_results)
 
-        prompt = (
-            f"Proposition ID: {proposition_id}\n"
-            f"Claim: {claim_text}\n"
-            f"Stage 1 Quantification Requirements: {json.dumps(plan_output.get('diagnostics', {}).get('quantification_requirements', []), ensure_ascii=False)}\n\n"
-            f"Deterministic Calculator Computation Result (HARD GROUND TRUTH):\n{calc_summary}\n\n"
-            f"Retrieved Baseline Policy Context:\n{formatted_evidence_text}\n\n"
-            "Task:\n"
-            "1. Evaluate claim against the Deterministic Calculator Computation Result.\n"
-            "2. YOU MUST STRICTLY ADHERE to the calculator result status:\n"
-            "   - 'VERIFIED': Fully met boundary requirements and supported by baseline metrics.\n"
-            "   - 'PARTIALLY_VERIFIED': Partially satisfied or has minor boundary ambiguity.\n"
-            "   - 'VIOLATED': Direct boundary conflict or out-of-bounds violation.\n"
-            "   - 'UNSUPPORTED': Insufficient baseline metric data to verify.\n"
-            "3. If status is 'PARTIALLY_VERIFIED' or 'UNSUPPORTED', provide trade-off choices or next steps in `preset_options`.\n"
-            "4. Fill `compliance_gap` with detailed explanation of the numeric paradox, violation, or lack of data; use null if VERIFIED.\n\n"
-            "Required Output JSON Format:\n"
-            "{\n"
-            '  "status": "VERIFIED" | "PARTIALLY_VERIFIED" | "VIOLATED" | "UNSUPPORTED",\n'
-            '  "preset_options": ["Option 1...", "Option 2..."],\n'
-            '  "compliance_gap": "Detailed explanation string or null",\n'
-            '  "verification_proofs": ["Location or clause reference..."]\n'
-            "}"
-        )
+        return {
+            "proposition_id": payload.get("proposition_id", ""),
+            "claim_text": payload.get("claim_text", ""),
+            "calc_summary": calc_summary,
+            "formatted_evidence_text": formatted_evidence_text,
+            "quantification_requirements": quantification_requirements
+        }
 
-        return [Message(role="user", content=prompt, name=self.name)]
+    def build_synthesis_messages(
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message],
+        agent: "BaseAgent",
+    ) -> List[Message]:
+        """Stage 3 Hook: Synthesizes deterministic calculator results and evidence into a structured ThresholdClaimVerdict."""
+        return super().build_synthesis_messages(payload, plan_output, tool_results, agent)
 
     def parse_final_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
