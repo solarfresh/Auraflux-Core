@@ -204,6 +204,19 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
     Supports dynamic hook detection for automatic stage bypassing.
     """
 
+    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Declares the sequence of fine-grained execution steps and their arguments
+        for Strategy dispatch, keeping handlers and pipelines completely agnostic of OrchestratorState.
+        """
+        return [
+            {"method_name": "_execute_planning_stage", "kwargs": {"payload": payload}},
+            {"method_name": "_run_pre_execution_validation_loop", "kwargs": {"payload": payload}},
+            {"method_name": "_execute_tool_workflow_stage", "kwargs": {"payload": payload}},
+            {"method_name": "_execute_synthesis_stage", "kwargs": {"payload": payload}},
+            {"method_name": "_verify_post_synthesis_boundary", "kwargs": {"payload": payload}}
+        ]
+
     async def _run_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
         if not isinstance(agent, PlanAndExecuteHandler):
             logger.error(

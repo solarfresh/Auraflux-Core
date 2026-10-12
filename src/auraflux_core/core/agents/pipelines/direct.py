@@ -1,5 +1,5 @@
 import json
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from auraflux_core.core.agents.pipelines.base import (BaseAgentPipeline,
                                                       PipelineRegistry)
@@ -15,6 +15,14 @@ class DirectPipeline(BaseAgentPipeline):
     Default fallback pipeline for direct single-turn LLM generation.
     Completely decoupled and universal with zero handler requirements.
     """
+
+    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Declares a single direct execution step for Strategy dispatching.
+        """
+        return [
+            {"method_name": "_run_pipeline", "kwargs": {"payload": payload}}
+        ]
 
     async def _run_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any], **kwargs) -> Any:
         if "messages" in payload and isinstance(payload["messages"], list):

@@ -1,7 +1,7 @@
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Type
 
 import structlog
 
@@ -73,6 +73,14 @@ class BaseAgentPipeline(ABC):
         """
         Internal implementation of specialized pipeline execution.
         Subclasses must implement this method instead of overriding execute().
+        """
+        pass
+
+    @abstractmethod
+    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Declares the sequence of fine-grained execution steps and their dispatch arguments
+        for Orchestration Strategy handling.
         """
         pass
 

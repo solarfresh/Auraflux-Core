@@ -229,3 +229,36 @@ async def test_plan_and_execute_pipeline_raises_type_error_for_invalid_agent():
         await pipeline.execute(agent=invalid_agent, payload=payload)
 
     assert "must implement PlanAndExecuteHandler interface" in str(exc_info.value)
+
+# =============================================================================
+# PlanAndExecutePipeline get_run_pipeline Tests
+# =============================================================================
+
+def test_plan_and_execute_pipeline_get_run_pipeline_structure():
+    """
+    Verify PlanAndExecutePipeline.get_run_pipeline(payload) returns
+    the expected sequence of fine-grained execution steps and dispatch arguments.
+    """
+    pipeline = PlanAndExecutePipeline()
+    payload = {"task": "test payload for pipeline steps"}
+
+    steps = pipeline.get_run_pipeline(payload=payload)
+
+    # Validate step count and structure
+    assert isinstance(steps, list)
+    assert len(steps) == 5
+
+    expected_methods = [
+        "_execute_planning_stage",
+        "_run_pre_execution_validation_loop",
+        "_execute_tool_workflow_stage",
+        "_execute_synthesis_stage",
+        "_verify_post_synthesis_boundary",
+    ]
+
+    for index, step in enumerate(steps):
+        assert isinstance(step, dict)
+        assert "method_name" in step
+        assert "kwargs" in step
+        assert step["method_name"] == expected_methods[index]
+        assert step["kwargs"] == {"payload": payload}

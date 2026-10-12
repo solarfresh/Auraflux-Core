@@ -47,7 +47,6 @@ class BaseOrchestrator:
         orchestrator_name = self.__class__.__name__
         strategy_name = self.strategy.__class__.__name__
 
-        # 綁定 Orchestrator 層級的 Context
         structlog.contextvars.bind_contextvars(
             orchestrator=orchestrator_name,
             orchestration_strategy=strategy_name,
