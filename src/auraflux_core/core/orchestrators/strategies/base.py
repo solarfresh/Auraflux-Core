@@ -63,7 +63,6 @@ class OrchestrationStrategy(ABC):
 
         resolved_method_name = actual_method.__name__
 
-        # 綁定當前 Dispatch 的 Actor 上下文
         structlog.contextvars.bind_contextvars(
             actor_name=actor_name,
             dispatch_method=resolved_method_name,
@@ -108,7 +107,6 @@ class OrchestrationStrategy(ABC):
             state.add_step(ExecutionStep(actor_name=actor_name, input_params=kwargs, error=str(e)))
             raise e
         finally:
-            # 清理 ContextVars
             structlog.contextvars.unbind_contextvars("actor_name", "dispatch_method")
 
     def register_tools_to_agents(

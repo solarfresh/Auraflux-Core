@@ -1,10 +1,11 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from auraflux_core.core.agents.base_agent import BaseAgent
 from auraflux_core.core.agents.pipelines.base import BaseAgentPipeline
+from auraflux_core.core.orchestrators.state import OrchestratorState
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.messages import PromptConfig, StageSpec
 from auraflux_core.core.tools.base_tool import BaseTool
@@ -15,6 +16,25 @@ class DummyPipeline(BaseAgentPipeline):
 
     async def _run_pipeline(self, agent: Any, payload: Dict[str, Any]) -> Any:
         return {"status": "success", "payload": payload}
+
+    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Declares dummy fine-grained execution steps for testing purposes."""
+        return [
+            {"method_name": "_dummy_step", "kwargs": {"payload": payload}}
+        ]
+
+
+class DummyPipelineForStrategy(BaseAgentPipeline):
+    """Dummy pipeline providing fine-grained steps for strategy execution testing."""
+
+    async def _run_pipeline(self, agent: Any, payload: Dict[str, Any]) -> Any:
+        return {"status": "success", "payload": payload}
+
+    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return [
+            {"method_name": "step_one", "kwargs": {"extra": "val_1"}},
+            {"method_name": "step_two", "kwargs": {}},
+        ]
 
 
 class ConcreteAgent(BaseAgent):
@@ -33,6 +53,12 @@ class MockAgentConfig(AgentConfig):
 def dummy_pipeline():
     """Fixture providing a fresh DummyPipeline instance."""
     return DummyPipeline()
+
+
+@pytest.fixture
+def dummy_pipeline_for_strategy():
+    """Fixture providing a DummyPipelineForStrategy instance."""
+    return DummyPipelineForStrategy()
 
 
 @pytest.fixture
@@ -113,6 +139,26 @@ class DummyTool(BaseTool):
 def dummy_tool():
     """Fixture providing a fresh DummyTool instance."""
     return DummyTool()
+
+
+@pytest.fixture
+def mock_orchestrator_state() -> OrchestratorState:
+    """Provides a fresh OrchestratorState instance for testing."""
+    return OrchestratorState(session_id="test_session_123")
+
+
+@pytest.fixture
+def mock_agents_registry() -> Dict[str, Any]:
+    """Provides a mock dictionary of available agents for routing."""
+    class DummyAgent:
+        def __init__(self, name: str):
+            self.name = name
+
+    return {
+        "agent_a": DummyAgent("agent_a"),
+        "agent_b": DummyAgent("agent_b"),
+        "agent_c": DummyAgent("agent_c"),
+    }
 
 
 @pytest.fixture

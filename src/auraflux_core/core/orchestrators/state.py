@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -19,7 +19,7 @@ class OrchestratorStatus(str, Enum):
 class ExecutionStep(BaseModel):
     """Represents a single atomic action within the orchestration loop."""
     step_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     actor_name: str
     input_params: Dict[str, Any]
     output_data: Optional[Any] = None
