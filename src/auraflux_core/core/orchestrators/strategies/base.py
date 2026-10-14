@@ -80,6 +80,7 @@ class OrchestrationStrategy(ABC):
             # Consistent Telemetry Recording
             step = ExecutionStep(
                 actor_name=actor_name,
+                method_name=method_name,
                 input_params=kwargs,
                 output_data=result,
                 token_usage=token_usage,
@@ -104,7 +105,7 @@ class OrchestrationStrategy(ABC):
                 duration_ms=round(duration_ms, 2),
                 exc_info=True,
             )
-            state.add_step(ExecutionStep(actor_name=actor_name, input_params=kwargs, error=str(e)))
+            state.add_step(ExecutionStep(actor_name=actor_name, method_name=method_name, input_params=kwargs, error=str(e)))
             raise e
         finally:
             structlog.contextvars.unbind_contextvars("actor_name", "dispatch_method")

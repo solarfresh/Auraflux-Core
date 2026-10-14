@@ -21,6 +21,7 @@ class ExecutionStep(BaseModel):
     step_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     actor_name: str
+    method_name: str
     input_params: Dict[str, Any]
     output_data: Optional[Any] = None
     error: Optional[str] = None

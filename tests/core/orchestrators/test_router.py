@@ -26,7 +26,7 @@ def test_sequential_router_cycling(mock_orchestrator_state: OrchestratorState, m
 
     # Simulate history recording for step 1 using ExecutionStep definition
     mock_orchestrator_state.history.append(
-        ExecutionStep(actor_name="agent_a", input_params={"payload": {}})
+        ExecutionStep(actor_name="agent_a", method_name="method_a", input_params={"payload": {}})
     )
 
     # Step 1: Should pick the second agent
@@ -34,7 +34,7 @@ def test_sequential_router_cycling(mock_orchestrator_state: OrchestratorState, m
     assert agent_2 == "agent_b"
 
     mock_orchestrator_state.history.append(
-        ExecutionStep(actor_name="agent_b", input_params={"payload": {}})
+        ExecutionStep(actor_name="agent_b", method_name="method_b", input_params={"payload": {}})
     )
 
     # Step 2: Should pick the third agent
@@ -42,7 +42,7 @@ def test_sequential_router_cycling(mock_orchestrator_state: OrchestratorState, m
     assert agent_3 == "agent_c"
 
     mock_orchestrator_state.history.append(
-        ExecutionStep(actor_name="agent_c", input_params={"payload": {}})
+        ExecutionStep(actor_name="agent_c", method_name="method_c", input_params={"payload": {}})
     )
 
     # Step 3: Should loop back to the first agent
@@ -61,7 +61,7 @@ def test_dynamic_handoff_router_with_signal(mock_orchestrator_state: Orchestrato
     assert first_agent == "agent_a"
 
     mock_orchestrator_state.history.append(
-        ExecutionStep(actor_name="agent_a", input_params={"payload": {}})
+        ExecutionStep(actor_name="agent_a", method_name="method_a", input_params={"payload": {}})
     )
 
     # Provide a result explicitly handing off control to 'agent_c'
@@ -82,7 +82,7 @@ def test_dynamic_handoff_router_fallback(mock_orchestrator_state: OrchestratorSt
 
     # Simulate execution by agent_a without handoff signal
     mock_orchestrator_state.history.append(
-        ExecutionStep(actor_name="agent_a", input_params={"payload": {}})
+        ExecutionStep(actor_name="agent_a", method_name="method_a", input_params={"payload": {}})
     )
 
     # Should fallback to an agent other than 'agent_a'
@@ -99,10 +99,10 @@ def test_router_max_steps_termination(mock_orchestrator_state: OrchestratorState
 
     # Execute up to max_steps
     mock_orchestrator_state.history.append(
-        ExecutionStep(actor_name="agent_a", input_params={"payload": {}})
+        ExecutionStep(actor_name="agent_a", method_name="method_a", input_params={"payload": {}})
     )
     mock_orchestrator_state.history.append(
-        ExecutionStep(actor_name="agent_b", input_params={"payload": {}})
+        ExecutionStep(actor_name="agent_b", method_name="method_b", input_params={"payload": {}})
     )
 
     # Router should return None when limit is hit
