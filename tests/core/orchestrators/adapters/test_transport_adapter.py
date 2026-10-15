@@ -3,7 +3,8 @@ from typing import Any, Dict, cast
 
 import pytest
 
-from auraflux_core.core.orchestrators.adapters import CallbackTransportAdapter
+from auraflux_core.core.orchestrators.adapters.transport_adapter import \
+    CallbackTransportAdapter
 from auraflux_core.core.orchestrators.state import (ExecutionStep,
                                                     OrchestratorState,
                                                     OrchestratorStatus)

@@ -3,7 +3,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from auraflux_core.core.orchestrators.adapters import CallbackTransportAdapter
+from auraflux_core.core.orchestrators.adapters.transport_adapter import \
+    CallbackTransportAdapter
 from auraflux_core.core.orchestrators.router import SequentialAgentRouter
 from auraflux_core.core.orchestrators.state import (OrchestratorState,
                                                     OrchestratorStatus)

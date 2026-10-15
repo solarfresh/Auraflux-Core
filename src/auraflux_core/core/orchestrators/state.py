@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
@@ -32,20 +33,21 @@ class ExecutionStep(BaseModel):
 class OrchestratorState(BaseModel):
     """
     Maintains the global state of an orchestration session.
-    Refactored to be domain-agnostic.
+    Refactored to be domain-agnostic and supports checkpoint serialization.
     """
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    # Schema version control for backward compatibility during resume
+    schema_version: str = Field(default="1.0.0")
 
     session_id: str = Field(default_factory=lambda: f"session_{uuid.uuid4().hex[:8]}")
     status: OrchestratorStatus = OrchestratorStatus.IDLE
 
     # Context & Data
-    source_identifier: Optional[str] = None  # Renamed from source_file for generality
-    current_unit_id: Optional[str] = None    # Renamed from chunk_id for generality
+    source_identifier: Optional[str] = None
+    current_unit_id: Optional[str] = None
 
     # --- Domain Agnostic Result Container ---
-    # Use this to store nodes/edges for Graph tasks,
-    # or text/blocks for other types of orchestration.
     output: Dict[str, Any] = Field(default_factory=dict)
 
     # Audit & History
@@ -63,3 +65,25 @@ class OrchestratorState(BaseModel):
 
     def update_status(self, new_status: OrchestratorStatus):
         self.status = new_status
+
+    def dump_checkpoint(self) -> str:
+        """
+        Serializes the current orchestrator state into a JSON string
+        for checkpoint persistence (Session Resilience).
+        """
+        return self.model_dump_json(indent=2)
+
+    @classmethod
+    def load_checkpoint(cls, json_data: str) -> "OrchestratorState":
+        """
+        Deserializes a JSON string back into an OrchestratorState instance,
+        enabling seamless session recovery.
+        """
+        data = json.loads(json_data)
+
+        # Optional: Add schema version validation hook here if schema evolves
+        if data.get("schema_version") != "1.0.0":
+            # Handle migration logic or raise compatibility warning
+            pass
+
+        return cls.model_validate(data)

@@ -3,8 +3,8 @@ from typing import Any, Dict, List, Optional, Type, cast
 from auraflux_core.core.agents.pipelines import PipelineRegistry
 from auraflux_core.core.agents.pipelines.base import BaseAgentPipeline
 from auraflux_core.core.configs.logging_config import get_logger
-from auraflux_core.core.orchestrators.adapters import OrchestrationCallbackPort
 from auraflux_core.core.orchestrators.base import OrchestrationStrategy
+from auraflux_core.core.orchestrators.ports import OrchestrationCallbackPort
 from auraflux_core.core.orchestrators.router import BaseAgentRouter
 from auraflux_core.core.orchestrators.state import (OrchestratorState,
                                                     OrchestratorStatus)
