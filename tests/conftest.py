@@ -10,6 +10,20 @@ from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.messages import PromptConfig, StageSpec
 from auraflux_core.core.tools.base_tool import BaseTool
 
+DEFAULT_AGENT_PARAMS = {
+    "name": "test_agent",
+    "provider": "openai",
+    "model": "gpt-4",
+    "pipeline_name": "direct",
+    "turn_limit": 10,
+    "output_format": "TEXT",
+    "lang": "default",
+    "system_message": None,
+    "prompt_config": None,
+    "tools": None,
+    "tool_call_protocol": "NATIVE",
+}
+
 
 class DummyPipeline(BaseAgentPipeline):
     """Reusable DummyPipeline for testing pipeline execution and registry."""
@@ -47,6 +61,15 @@ class MockAgentConfig(AgentConfig):
     name: str = "mock_agent"
     model: str = "mock-model"
     provider: str = "mock-provider"
+
+
+@pytest.fixture
+def base_agent_params():
+    from operator import itemgetter
+
+    keys_to_extract = ['name', 'provider', 'model']
+    getter = itemgetter(*keys_to_extract)
+    return dict(zip(keys_to_extract, getter(DEFAULT_AGENT_PARAMS)))
 
 
 @pytest.fixture
@@ -105,17 +128,8 @@ def mock_client_manager():
 def default_config():
     """Provides a fully-mocked AgentConfig with standard defaults."""
     config = MagicMock(spec=AgentConfig)
-    config.name = "TestAgent"
-    config.provider = "openai"
-    config.model = "gpt-4o"
-    config.pipeline_name = "direct"
-    config.turn_limit = 10
-    config.output_format = "TEXT"
-    config.lang = "default"
-    config.system_message = None
-    config.prompt_config = None
-    config.tools = None
-    config.tool_call_protocol = "native"
+    for key, value in DEFAULT_AGENT_PARAMS.items():
+        setattr(config, key, value)
     return config
 
 
