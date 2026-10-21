@@ -23,7 +23,7 @@ graph TD
     subgraph Orchestration & Agent Execution
         Orchestrator --> Agent[ExtractKeywordsAgent]
         Agent --> Plan[Stage 1: LLM Extraction]
-        Plan --> ToolExec[ToolExecutor (Stage 1.5)]
+        Plan --> ToolExec["ToolExecutor (Stage 1.5)"]
         ToolExec --> TripleProc[TripleProcessorTool]
         ToolExec --> RuleCheck[TripleRuleCheckerTool]
         RuleCheck --> Validation{Validation Result}
