@@ -18,3 +18,13 @@ def test_extract_keywords_agent_config_invalid_max_tokens(base_agent_params):
     """
     with pytest.raises(ValidationError):
         ExtractKeywordsAgentConfig(**base_agent_params, max_tokens=-1)
+
+def test_extract_keywords_agent_config_invalid_temperature(base_agent_params):
+    """
+    Test Case: Verify ValidationError is raised when temperature is out of range (e.g., -0.1 or 3.0).
+    """
+    with pytest.raises(ValidationError):
+        ExtractKeywordsAgentConfig(**base_agent_params, temperature=-0.1)
+
+    with pytest.raises(ValidationError):
+        ExtractKeywordsAgentConfig(**base_agent_params, temperature=3.0)

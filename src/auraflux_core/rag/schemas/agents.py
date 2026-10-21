@@ -51,11 +51,13 @@ class ExtractKeywordsAgentConfig(AgentConfig):
         )
     )
 
-    tools: List["BaseTool"] = [
-        TripleProcessorTool(),
-        TripleRuleCheckerTool()
-    ]
+    tools: List["BaseTool"] = Field(
+        default_factory=lambda: [
+            TripleProcessorTool(),
+            TripleRuleCheckerTool()
+        ]
+    )
 
-    max_refine_retries: int = 3
-    max_tokens: NonNegativeInt= 32768
-    temperature: float = 0.0
+    max_refine_retries: int = Field(default=3, ge=0)
+    max_tokens: NonNegativeInt = Field(default=32768, gt=0)
+    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
