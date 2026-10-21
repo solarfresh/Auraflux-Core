@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 ## 3. Basic Configuration
 
-Ensure environment variables or configuration files under `src/auraflux_core/core/configs/` are properly set for your LLM providers (e.g., Gemini, OpenAI, vLLM).
+Ensure environment variables or configuration files under [`src/auraflux_core/core/configs/`](src/auraflux_core/core/configs/settings.py) are properly set for your LLM providers (e.g., Gemini, OpenAI, vLLM).
 
 ## 4. Running Tests
 
@@ -27,3 +27,16 @@ Verify your installation by running tests through pytest in your isolated enviro
 ```bash
 pytest
 ```
+
+---
+
+## 5. Recommended Learning Path & Next Steps
+
+To ensure a smooth learning curve, follow this recommended progression path when building with **Auraflux-Core**:
+
+1. **Phase 1: Foundations & Individual Agents**
+   - **[Basic Agent Tutorial (`basic-agent-tutorial.md`)](./basic-agent-tutorial.md)**: Learn how to initialize client managers, configure prompts, and execute individual agents.
+2. **Phase 2: Workflow Orchestration**
+   - **[Orchestrator Tutorial (`orchestrator-tutorial.md`)](./orchestrator-tutorial.md)**: Master how to wrap and coordinate agents and tools into structured orchestrators using `BaseOrchestrator`.
+3. **Phase 3: Advanced Modules & Integration**
+   - **[Core Module Usage (`usage.md`)](./usage.md)**: Dive deeper into core components, client management, alignment strategies, and RAG pipelines.

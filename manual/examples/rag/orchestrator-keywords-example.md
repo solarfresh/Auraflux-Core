@@ -72,9 +72,9 @@ class ChunkExtractionOrchestrator(BaseOrchestrator):
         """
         payload = {"excerpt_text": excerpt_text}
 
-        # Invoke the ExtractKeywordsAgent plan-and-execute pipeline
+        # Invoke the ExtractKeywordsAgent run pipeline
         # (Includes Stage 1 extraction, Stage 1.5 rule checking, and reflection if needed)
-        plan_output = await self.extractor_agent.execute(payload=payload)
+        plan_output = await self.extractor_agent.run(payload=payload)
 
         return {
             "excerpt_text": excerpt_text,
