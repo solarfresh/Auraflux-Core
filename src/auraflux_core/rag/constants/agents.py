@@ -53,9 +53,9 @@ DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_TEMPLATE = (
     "### REQUIRED OUTPUT FORMAT (JSON)\n"
     "CRITICAL: Your output MUST be a SINGLE JSON OBJECT containing two root keys: 'triples' and 'tags'. "
     "DO NOT return a top-level JSON Array/List [].\n\n"
-    "{\n"
+    "{{\n"
     '  "triples": [\n'
-    "    {\n"
+    "    {{\n"
     '      \"subject\": \"<exact text from chunk>\",\n'
     '      \"subject_resolved\": \"<resolved entity name or null>\",\n'
     '      \"predicate\": \"<action or relation verb>\",\n'
@@ -65,10 +65,10 @@ DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_TEMPLATE = (
     '      \"normalized_value\": <numeric value or null>,\n'
     '      \"unit\": \"<unit string or null>\",\n'
     '      \"operator\": \"<operator string or null>\"\n'
-    "    }\n"
+    "    }}\n"
     "  ],\n"
     '  "tags": ["<keyword_1>", "<keyword_2>"]\n'
-    "}"
+    "}}"
 )
 
 DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
@@ -130,9 +130,9 @@ DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_REFINEMENT_TEMPLATE = (
     "### REQUIRED OUTPUT FORMAT (JSON)\n"
     "CRITICAL: Your output MUST be a SINGLE JSON OBJECT containing two root keys: 'triples' and 'tags'. "
     "DO NOT return a top-level JSON Array/List [].\n\n"
-    "{\n"
+    "{{\n"
     '  "triples": [\n'
-    "    {\n"
+    "    {{\n"
     '      \"subject\": \"<exact text from chunk>\",\n'
     '      \"subject_resolved\": \"<resolved entity name or null>\",\n'
     '      \"predicate\": \"<action or relation verb>\",\n'
@@ -142,9 +142,9 @@ DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_REFINEMENT_TEMPLATE = (
     '      \"normalized_value\": <numeric value or null>,\n'
     '      \"unit\": \"<unit string or null>\",\n'
     '      \"operator\": \"<operator string or null>\"\n'
-    "    }\n"
+    "    }}\n"
     "  ]\n"
-    "}"
+    "}}"
 )
 
 DEFAULT_EXTRACT_KEYWORDS_AGENT_PLAN_REFINE_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
