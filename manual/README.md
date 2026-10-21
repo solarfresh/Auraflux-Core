@@ -11,7 +11,7 @@ Welcome to the **Auraflux-Core** framework operation manual. This manual is desi
 2. [Concepts (`concepts/`)](./concepts/)
    - [System Architecture (`architecture.md`)](./concepts/architecture.md): Core architecture, module design, data flow, and state management.
 3. [Examples (`examples/`)](./examples/)
-   - [RAG Examples (`examples/rag/`)](./examples/rag/): Advanced RAG orchestrator and keywords extraction examples.
+   - [RAG Examples (`examples/rag/`)](./examples/rag/README.md): Advanced RAG orchestrator and keywords extraction examples.
 4. [API Reference (`api/`)](./api/)
    - Comprehensive API specifications and references (coming soon).
 
