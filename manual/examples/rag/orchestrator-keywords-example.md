@@ -2,6 +2,8 @@
 
 This document demonstrates how to combine [`BaseOrchestrator`](src/auraflux_core/core/orchestrators/base.py:16) and [`ExtractKeywordsAgent`](src/auraflux_core/rag/agents/keywords_extractor.py:14) within the **Auraflux-Core** framework to extract structured keywords, tags, and semantic triples (Chunk structures) from input texts.
 
+> **Prerequisite:** If you are new to the framework, please review the [`Basic Agent Tutorial`](manual/tutorials/basic-agent-tutorial.md) first to understand fundamental agent creation and execution.
+
 ---
 
 ## 1. Introduction
