@@ -29,3 +29,4 @@ The `rag` module supports document ingestion, chunking, filtering, and hybrid re
 
 - **Chunkers**: Use `DynamicChunker` or `ParagraphChunker`.
 - **Retrievers**: Utilize `OpenSearchRetriever` and `HybridRetriever`.
+- **Examples**: See [`rag-orchestrator-example.md`](./examples/rag/rag-orchestrator-example.md) for a complete RAG orchestrator guide.
