@@ -200,7 +200,7 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
     ) -> ObjectiveClaimVerdict:
         """
         Main execution facade for verifying an individual objective claim.
-        Delegates execution directly to the bound Pipeline strategy via agent.run()[cite: 11].
+        Delegates execution directly to the bound Pipeline strategy via agent.execute()[cite: 11].
         """
         payload: Dict[str, Any] = {
             "proposition_id": proposition_id,
@@ -213,5 +213,5 @@ class ObjectiveClaimAgent(BaseAgent, AlignmentHandler):
         if index_name is not None:
             payload["index_name"] = index_name
 
-        # Executes via BaseAgent.run(), which delegates directly to self.pipeline[cite: 11]
-        return await self.run(payload)
+        # Executes via BaseAgent.execute(), which delegates directly to self.pipeline[cite: 11]
+        return await self.execute(payload)

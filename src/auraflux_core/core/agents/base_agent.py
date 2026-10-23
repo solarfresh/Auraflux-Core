@@ -172,11 +172,13 @@ class BaseAgent(ABC):
 
         return self.output_parser.strip_thinking_tags(output_string)
 
-    async def run(self, payload: Dict[str, Any]) -> Any:
+    async def execute(self, payload: Dict[str, Any]) -> Any:
         """
         Main execution entry point.
         Delegates control flow execution directly to the bound Pipeline strategy.
         """
+        if not isinstance(payload, dict):
+            raise TypeError(f"Payload must be a dictionary, got {type(payload)}")
         return await self.pipeline.execute(agent=self, payload=payload)
 
     def get_prompt_formatter(self) -> Any:

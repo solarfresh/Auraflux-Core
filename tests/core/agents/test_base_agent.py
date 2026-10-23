@@ -41,10 +41,10 @@ def test_register_tools_via_agent_delegates_to_executor(
 
 
 @pytest.mark.asyncio
-async def test_agent_run_delegates_to_pipeline(
+async def test_agent_execute_delegates_to_pipeline(
     default_config, mock_client_manager, concrete_agent_factory
 ):
-    """Verify calling agent.run(payload) delegates execution flow directly to bound Pipeline."""
+    """Verify calling agent.execute(payload) delegates execution flow directly to bound Pipeline."""
     agent = concrete_agent_factory(config=default_config, client_manager=mock_client_manager)
 
     mock_pipeline = MagicMock(spec=BaseAgentPipeline)
@@ -52,10 +52,21 @@ async def test_agent_run_delegates_to_pipeline(
     agent.pipeline = mock_pipeline
 
     payload = {"prompt": "Execute task"}
-    result = await agent.run(payload)
+    result = await agent.execute(payload)
 
     mock_pipeline.execute.assert_called_once_with(agent=agent, payload=payload)
     assert result == "pipeline_result"
+
+
+@pytest.mark.asyncio
+async def test_agent_execute_raises_type_error_for_invalid_payload(
+    default_config, mock_client_manager, concrete_agent_factory
+):
+    """Verify agent.execute(payload) raises TypeError if payload is not a dictionary."""
+    agent = concrete_agent_factory(config=default_config, client_manager=mock_client_manager)
+
+    with pytest.raises(TypeError):
+        await agent.execute("invalid_payload")
 
 
 def test_base_tool_executor_register_tools_formats(

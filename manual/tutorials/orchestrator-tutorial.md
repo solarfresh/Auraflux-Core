@@ -38,7 +38,7 @@ class SimpleTaskOrchestrator(BaseOrchestrator):
         Execute the orchestrator workflow.
         """
         # Invoke the agent's standard run interface
-        agent_output = await self.agent.run(payload=input_data)
+        agent_output = await self.agent.execute(payload=input_data)
 
         return {
             "status": "success",
