@@ -25,6 +25,12 @@ class BaseOrchestrator:
         agents: Dict[str, Any],
         config: Optional[Dict[str, Any]] = None
     ):
+        if not isinstance(agents, dict):
+            raise TypeError(f"Agents must be a dictionary, got {type(agents)}")
+        for key, value in agents.items():
+            if not isinstance(key, str):
+                raise TypeError(f"Agent keys must be strings, got {type(key)}")
+
         self.strategy = strategy
         self.tools = {tool.get_name(): tool for tool in tools}
         self.agents = agents
