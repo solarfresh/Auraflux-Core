@@ -39,6 +39,6 @@ async def test_base_orchestrator_run_success():
     agents = {"agent1": MagicMock()}
 
     orchestrator = BaseOrchestrator(strategy=strategy, tools=tools, agents=agents)
-    state = await orchestrator.run(input_data={"task": "do something"})
+    state = await orchestrator.execute(input_data={"task": "do something"})
 
     assert orchestrator.state.status == OrchestratorStatus.COMPLETED

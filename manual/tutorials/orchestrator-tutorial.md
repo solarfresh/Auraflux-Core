@@ -9,7 +9,7 @@ This tutorial introduces the core design principles and basic usage of Orchestra
 Within the Auraflux framework, Orchestrators inherit from [`BaseOrchestrator`](src/auraflux_core/core/orchestrators/base.py:16) with core responsibilities including:
 - **Workflow Encapsulation**: Encapsulating multi-agent execution sequences (e.g., Extraction -> Validation -> Refinement) into a single high-level interface.
 - **State Management**: Tracking execution stages and context via [`OrchestratorState`](src/auraflux_core/core/orchestrators/state.py) and strategy patterns (e.g., [`DualLayerStrategy`](src/auraflux_core/core/orchestrators/strategies/dual_layer_strategy.py)).
-- **Interface Consistency**: Providing a unified `.run(input_data)` method externally.
+- **Interface Consistency**: Providing a unified `.execute(input_data)` method externally.
 
 ---
 
@@ -40,7 +40,7 @@ class SimpleTaskOrchestrator(BaseOrchestrator):
 # strategy = MyCustomStrategy()
 # agents = {"assistant": my_agent_instance}
 # orchestrator = SimpleTaskOrchestrator(strategy=strategy, tools=[], agents=agents)
-# result = await orchestrator.run(input_data={"task": "do something"})
+# result = await orchestrator.execute(input_data={"task": "do something"})
 ```
 
 ---

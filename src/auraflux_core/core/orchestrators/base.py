@@ -45,7 +45,7 @@ class BaseOrchestrator:
             agent_names=list(self.agents.keys()),
         )
 
-    async def run(self, input_data: Any) -> OrchestratorState:
+    async def execute(self, input_data: Any) -> OrchestratorState:
         """
         Delegates the execution to the injected strategy.
         Automatically binds orchestrator context and logs execution state transitions.
@@ -99,7 +99,6 @@ class BaseOrchestrator:
             )
             return self.state
         finally:
-            # 清理 Orchestrator 層級 Context
             structlog.contextvars.unbind_contextvars("orchestrator", "orchestration_strategy")
 
     def set_strategy(self, strategy: OrchestrationStrategy):
