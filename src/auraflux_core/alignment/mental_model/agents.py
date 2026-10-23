@@ -212,7 +212,7 @@ class MentalModelAgent(BaseAgent, AlignmentHandler):
         """
         Main execution facade for verifying an individual mental-model (subjective
         expectation) claim. Delegates execution directly to the bound Pipeline
-        strategy via agent.run().
+        strategy via agent.execute().
         """
         payload: Dict[str, Any] = {
             "proposition_id": proposition_id,
@@ -225,5 +225,5 @@ class MentalModelAgent(BaseAgent, AlignmentHandler):
         if index_name is not None:
             payload["index_name"] = index_name
 
-        # Executes via BaseAgent.run(), which delegates directly to self.pipeline
-        return await self.run(payload)
+        # Executes via BaseAgent.execute(), which delegates directly to self.pipeline
+        return await self.execute(payload)

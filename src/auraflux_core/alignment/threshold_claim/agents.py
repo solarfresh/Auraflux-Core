@@ -265,7 +265,7 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
     ) -> ThresholdClaimVerdict:
         """
         Main execution facade for verifying a threshold/quantitative claim.
-        Delegates execution directly to the bound Pipeline strategy via agent.run()[cite: 12].
+        Delegates execution directly to the bound Pipeline strategy via agent.execute()[cite: 12].
         """
         payload: Dict[str, Any] = {
             "proposition_id": proposition_id,
@@ -278,5 +278,5 @@ class ThresholdClaimAgent(BaseAgent, AlignmentHandler):
         if index_name is not None:
             payload["index_name"] = index_name
 
-        # Executes via BaseAgent.run(), which delegates directly to self.pipeline[cite: 12]
-        return await self.run(payload)
+        # Executes via BaseAgent.execute(), which delegates directly to self.pipeline[cite: 12]
+        return await self.execute(payload)
