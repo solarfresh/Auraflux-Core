@@ -40,3 +40,4 @@ To ensure a smooth learning curve, follow this recommended progression path when
    - **[Orchestrator Tutorial (`orchestrator-tutorial.md`)](./orchestrator-tutorial.md)**: Master how to wrap and coordinate agents and tools into structured orchestrators using `BaseOrchestrator`.
 3. **Phase 3: Advanced Modules & Integration**
    - **[Core Module Usage (`usage.md`)](./usage.md)**: Dive deeper into core components, client management, alignment strategies, and RAG pipelines.
+   - **[Backend Integration Guide (`backend-integration.md`)](./backend-integration.md)**: Learn how to share and invoke Agents and Orchestrators cleanly inside web backend services (such as FastAPI).
