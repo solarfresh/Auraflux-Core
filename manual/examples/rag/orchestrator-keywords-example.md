@@ -66,7 +66,7 @@ class ChunkExtractionOrchestrator(BaseOrchestrator):
         self.extractor_agent = extractor_agent
         self.client_manager = client_manager
 
-    async def run(self, excerpt_text: str) -> Dict[str, Any]:
+    async def execute(self, excerpt_text: str) -> Dict[str, Any]:
         """
         Execute the chunk extraction workflow on the given text excerpt.
         """
@@ -111,7 +111,7 @@ async def main():
         "It supports multi-path hybrid retrieval, semantic filtering, and structured triple extraction."
     )
 
-    result = await orchestrator.run(excerpt_text=sample_text)
+    result = await orchestrator.execute(excerpt_text=sample_text)
     print("Extraction Result:")
     print(result)
 

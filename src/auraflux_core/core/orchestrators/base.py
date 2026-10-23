@@ -25,6 +25,12 @@ class BaseOrchestrator:
         agents: Dict[str, Any],
         config: Optional[Dict[str, Any]] = None
     ):
+        if not isinstance(agents, dict):
+            raise TypeError(f"Agents must be a dictionary, got {type(agents)}")
+        for key, value in agents.items():
+            if not isinstance(key, str):
+                raise TypeError(f"Agent keys must be strings, got {type(key)}")
+
         self.strategy = strategy
         self.tools = {tool.get_name(): tool for tool in tools}
         self.agents = agents
@@ -39,7 +45,7 @@ class BaseOrchestrator:
             agent_names=list(self.agents.keys()),
         )
 
-    async def run(self, input_data: Any) -> OrchestratorState:
+    async def execute(self, input_data: Any) -> OrchestratorState:
         """
         Delegates the execution to the injected strategy.
         Automatically binds orchestrator context and logs execution state transitions.
@@ -93,7 +99,6 @@ class BaseOrchestrator:
             )
             return self.state
         finally:
-            # 清理 Orchestrator 層級 Context
             structlog.contextvars.unbind_contextvars("orchestrator", "orchestration_strategy")
 
     def set_strategy(self, strategy: OrchestrationStrategy):
