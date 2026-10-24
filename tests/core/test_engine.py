@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock, MagicMock
 
 import pytest
 
@@ -44,3 +44,67 @@ class TestAurafluxEngine:
                 await engine.initialize()
 
         assert engine.is_initialized is False
+
+    async def test_execute_agent_uninitialized_raises_error(self):
+        """Edge Case: Calling execute_agent before initialization raises RuntimeError."""
+        engine = AurafluxEngine()
+
+        with pytest.raises(RuntimeError, match="AurafluxEngine is not initialized."):
+            await engine.execute_agent(agent_type="test", prompt="hello")
+
+    async def test_execute_agent_unknown_type_raises_error(self):
+        """Edge Case: Calling execute_agent with unknown type raises ValueError."""
+        engine = AurafluxEngine()
+        await engine.initialize()
+
+        with pytest.raises(ValueError, match="is not registered in AGENT_REGISTRY"):
+            await engine.execute_agent(agent_type="unknown", prompt="hello")
+
+    async def test_execute_agent_invalid_temperature_raises_error(self):
+        """Edge Case: Calling execute_agent with out-of-bounds temperature raises ValueError."""
+        engine = AurafluxEngine()
+        await engine.initialize()
+
+        mock_agent_instance = MagicMock()
+        mock_agent_class = MagicMock(return_value=mock_agent_instance)
+        mock_config_class = MagicMock()
+
+        mock_impl = MagicMock()
+        mock_impl.agent_class = mock_agent_class
+        mock_impl.config_class = mock_config_class
+
+        with patch.dict(engine.agent_registry, {"mock_agent": mock_impl}, clear=False):
+            with pytest.raises(ValueError, match="Temperature must be between 0.0 and 2.0"):
+                await engine.execute_agent(
+                    agent_type="mock_agent",
+                    prompt="test-prompt",
+                    temperature=2.5,
+                )
+
+    async def test_execute_agent_success(self):
+        """Happy Path: Successful execution of an agent via execute_agent."""
+        engine = AurafluxEngine()
+        await engine.initialize()
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.execute = AsyncMock(return_value="agent-response")
+
+        mock_agent_class = MagicMock(return_value=mock_agent_instance)
+        mock_config_class = MagicMock()
+
+        mock_impl = MagicMock()
+        mock_impl.agent_class = mock_agent_class
+        mock_impl.config_class = mock_config_class
+
+        with patch.dict(engine.agent_registry, {"mock_agent": mock_impl}, clear=False):
+            result = await engine.execute_agent(
+                agent_type="mock_agent",
+                prompt="test-prompt",
+                provider="openai",
+                model_id="gpt-4o",
+                temperature=0.5,
+            )
+
+            assert result == "agent-response"
+            mock_agent_class.assert_called_once()
+            mock_agent_instance.execute.assert_awaited_once_with(prompt="test-prompt")

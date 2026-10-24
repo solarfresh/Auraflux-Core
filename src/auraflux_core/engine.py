@@ -1,6 +1,8 @@
-from typing import Optional
-from auraflux_core.core.clients.client_manager import ClientManager
+from typing import Any, Dict, Optional
+
 from auraflux_core.agents import AGENT_REGISTRY
+from auraflux_core.core.clients.client_manager import ClientManager
+
 
 class AurafluxEngine:
     def __init__(self, config: Optional[dict] = None):
@@ -66,4 +68,56 @@ class AurafluxEngine:
     # Example of a core method protected by _ensure_initialized
     def get_agent_class(self, agent_name: str):
         self._ensure_initialized()
-        return self.agent_registry.get(agent_name)
+        impl = self.agent_registry.get(agent_name)
+        return impl.agent_class if impl else None
+
+    async def execute_agent(
+        self,
+        agent_type: str,
+        prompt: str,
+        provider: Optional[str] = None,
+        model_id: Optional[str] = None,
+        prompt_config: Optional[Any] = None,
+        temperature: Optional[float] = None,
+    ) -> Any:
+        """
+        Execute an agent by type with the given prompt and optional configuration overrides.
+
+        :param agent_type: The registered agent type string.
+        :param prompt: The input prompt for the agent.
+        :param provider: Optional LLM provider override.
+        :param model_id: Optional model ID override.
+        :param prompt_config: Optional prompt configuration override.
+        :param temperature: Optional temperature override.
+        :return: The execution result from the agent.
+        :raises RuntimeError: If the engine is not initialized.
+        :raises ValueError: If the agent_type is not registered.
+        """
+        self._ensure_initialized()
+
+        agent_impl = self.agent_registry.get(agent_type)
+        if not agent_impl:
+            raise ValueError(f"Agent type '{agent_type}' is not registered in AGENT_REGISTRY.")
+
+        agent_class = agent_impl.agent_class
+        config_class = agent_impl.config_class
+
+        # Build config kwargs based on config_class or default AgentConfig
+        config_kwargs: Dict[str, Any] = {
+            "name": agent_type,
+            "provider": provider or "openai",
+            "model": model_id or "gpt-4o",
+        }
+        if prompt_config:
+            config_kwargs["prompt_config"] = prompt_config
+        if temperature is not None:
+            if not (0.0 <= temperature <= 2.0):
+                raise ValueError(f"Temperature must be between 0.0 and 2.0, got {temperature}")
+            config_kwargs["temperature"] = temperature
+
+        agent_config = config_class(**config_kwargs)
+
+        # Instantiate agent
+        agent = agent_class(config=agent_config, client_manager=self.client_manager)
+
+        return await agent.execute(prompt=prompt)
