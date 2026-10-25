@@ -1,4 +1,5 @@
-from unittest.mock import patch, AsyncMock, MagicMock
+from typing import cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -108,3 +109,44 @@ class TestAurafluxEngine:
             assert result == "agent-response"
             mock_agent_class.assert_called_once()
             mock_agent_instance.execute.assert_awaited_once_with(prompt="test-prompt")
+
+    async def test_execute_orchestrator_success(self):
+        """Happy Path: Successful execution of an orchestrator via execute_orchestrator."""
+        engine = AurafluxEngine()
+        await engine.initialize()
+
+        with patch("auraflux_core.core.orchestrators.base.BaseOrchestrator.execute") as mock_exec:
+            mock_exec.return_value = MagicMock(status=MagicMock(value="completed"), metadata={})
+
+            result = await engine.execute_orchestrator(
+                orchestrator_type="default",
+                initial_state={"messages": []},
+                agents_map={"dummy": MagicMock()}
+            )
+
+            assert isinstance(result, dict)
+            assert result["status"] == "success"
+            assert "final_state" in result
+            assert "metadata" in result
+            mock_exec.assert_awaited_once()
+
+    async def test_execute_orchestrator_uninitialized(self):
+        """Edge Case: Calling execute_orchestrator before initialization raises RuntimeError."""
+        engine = AurafluxEngine()
+        with pytest.raises(RuntimeError, match="AurafluxEngine is not initialized."):
+            await engine.execute_orchestrator(orchestrator_type="default", initial_state={})
+
+    async def test_execute_orchestrator_invalid_type(self):
+        """Edge Case: Calling execute_orchestrator with invalid type raises ValueError."""
+        engine = AurafluxEngine()
+        await engine.initialize()
+        with pytest.raises(ValueError, match="is not supported"):
+            await engine.execute_orchestrator(orchestrator_type="invalid_type", initial_state={})
+
+    async def test_execute_orchestrator_invalid_state(self):
+        """Edge Case: Calling execute_orchestrator with invalid initial_state raises ValueError."""
+        engine = AurafluxEngine()
+        await engine.initialize()
+        with pytest.raises(ValueError, match="initial_state must be a dictionary"):
+            await engine.execute_orchestrator(orchestrator_type="default", initial_state=cast(dict, "invalid_state"))
+

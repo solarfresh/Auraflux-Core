@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional
 
 from auraflux_core.agents import AGENT_REGISTRY
 from auraflux_core.core.clients.client_manager import ClientManager
+from auraflux_core.orchestrators import ORCHESTRATOR_REGISTRY
 
 
 class AurafluxEngine:
@@ -121,3 +122,53 @@ class AurafluxEngine:
         agent = agent_class(config=agent_config, client_manager=self.client_manager)
 
         return await agent.execute(prompt=prompt)
+
+    async def execute_orchestrator(
+        self,
+        orchestrator_type: str,
+        initial_state: dict,
+        agents_map: Optional[Dict[str, Any]] = None,
+        config: Optional[dict] = None,
+    ) -> dict:
+        """
+        Execute an orchestrator by type with the given initial state.
+
+        :param orchestrator_type: The orchestrator type string.
+        :param initial_state: The initial state dictionary.
+        :param agents_map: Optional agents mapping.
+        :param config: Optional execution configuration.
+        :return: A dictionary containing the final state and metadata.
+        :raises RuntimeError: If the engine is not initialized.
+        :raises ValueError: If the orchestrator_type is not supported or initial_state is invalid.
+        """
+        self._ensure_initialized()
+
+        if not isinstance(initial_state, dict):
+            raise ValueError("initial_state must be a dictionary.")
+
+        impl = ORCHESTRATOR_REGISTRY.get(orchestrator_type)
+        if not impl:
+            raise ValueError(f"Orchestrator type '{orchestrator_type}' is not supported.")
+
+        try:
+            strategy = impl.strategy_class(router=impl.router_class())
+            orchestrator = impl.orchestrator_class(
+                strategy=strategy,
+                tools=[],
+                agents=agents_map or {},
+                config=config
+            )
+
+            final_state = await orchestrator.execute(input_data=initial_state)
+
+            return {
+                "status": "success" if final_state.status.value == "completed" else "failed",
+                "final_state": final_state.metadata,
+                "metadata": {"orchestrator_type": orchestrator_type},
+            }
+        except Exception as e:
+            return {
+                "status": "failed",
+                "error": str(e),
+                "metadata": {"orchestrator_type": orchestrator_type},
+            }
