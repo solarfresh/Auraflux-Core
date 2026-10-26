@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class OrchestratorConfig(BaseModel):
@@ -11,3 +12,10 @@ class OrchestratorConfig(BaseModel):
     tools: Optional[List[Any]] = None
     agents: Optional[Dict[str, Any]] = None
     timeout: Optional[float] = Field(default=30.0, description="Workflow execution timeout in seconds.")
+
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None and v <= 0:
+            raise ValueError("timeout must be greater than 0")
+        return v

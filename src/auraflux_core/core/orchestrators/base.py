@@ -35,7 +35,7 @@ class BaseOrchestrator:
         self.strategy = strategy
         self.tools = {tool.get_name(): tool for tool in tools}
         self.agents = agents
-        self.config = config or OrchestratorConfig(client_config=None) # type: ignore
+        self.config = config or OrchestratorConfig()
         self.state = OrchestratorState()
 
         logger.info(
