@@ -118,7 +118,10 @@ class TestAurafluxEngine:
         await engine.initialize()
 
         with patch("auraflux_core.core.orchestrators.base.BaseOrchestrator.execute") as mock_exec:
-            mock_exec.return_value = MagicMock(status=MagicMock(value="completed"), metadata={})
+            mock_state = MagicMock()
+            mock_state.status = MagicMock(value="completed")
+            mock_state.metadata = {}
+            mock_exec.return_value = mock_state
 
             result = await engine.execute_orchestrator(
                 orchestrator_type="default",
