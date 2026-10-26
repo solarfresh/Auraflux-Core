@@ -6,6 +6,7 @@ from auraflux_core.core.schemas.orchestrators import OrchestratorConfig
 def test_orchestrator_config_defaults():
     config = OrchestratorConfig()
     assert config.timeout == 30.0
+    assert config.max_retries == 3
     assert config.strategy is None
     assert config.tools is None
     assert config.agents is None
