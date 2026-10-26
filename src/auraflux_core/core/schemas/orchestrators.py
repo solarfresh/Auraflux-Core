@@ -9,7 +9,8 @@ class OrchestratorConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
-    client_config: ClientConfig
+    client_config: Optional[ClientConfig] = None
     strategy: Optional[Any] = None
     tools: Optional[List[Any]] = None
     agents: Optional[Dict[str, Any]] = None
+    timeout: Optional[float] = Field(default=30.0, description="Workflow execution timeout in seconds.")

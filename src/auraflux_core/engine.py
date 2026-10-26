@@ -8,13 +8,13 @@ from auraflux_core.orchestrators import ORCHESTRATOR_REGISTRY
 
 
 class AurafluxEngine:
-    def __init__(self, config: Optional[EngineConfig] = None):
+    def __init__(self, config: EngineConfig):
         """
         Initialize the AurafluxEngine.
 
-        :param config: Optional EngineConfig configuration.
+        :param config: EngineConfig configuration.
         """
-        self.config = config or EngineConfig(client_config=None) # type: ignore
+        self.config = config
         self._is_initialized = False
         self.client_manager: Optional[ClientManager] = None
         self.agent_registry = AGENT_REGISTRY
@@ -146,6 +146,10 @@ class AurafluxEngine:
 
         if not isinstance(initial_state, dict):
             raise ValueError("initial_state must be a dictionary.")
+
+        if config is not None:
+            if not isinstance(config, OrchestratorConfig):
+                raise ValueError("config must be an instance of OrchestratorConfig.")
 
         impl = ORCHESTRATOR_REGISTRY.get(orchestrator_type)
         if not impl:
