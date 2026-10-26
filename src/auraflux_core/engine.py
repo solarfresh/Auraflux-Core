@@ -2,17 +2,19 @@ from typing import Any, Dict, Optional
 
 from auraflux_core.agents import AGENT_REGISTRY
 from auraflux_core.core.clients.client_manager import ClientManager
+from auraflux_core.core.schemas.engine import EngineConfig
+from auraflux_core.core.schemas.orchestrators import OrchestratorConfig
 from auraflux_core.orchestrators import ORCHESTRATOR_REGISTRY
 
 
 class AurafluxEngine:
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: Optional[EngineConfig] = None):
         """
         Initialize the AurafluxEngine.
 
-        :param config: Optional configuration dictionary.
+        :param config: Optional EngineConfig configuration.
         """
-        self.config = config or {}
+        self.config = config or EngineConfig(client_config=None) # type: ignore
         self._is_initialized = False
         self.client_manager: Optional[ClientManager] = None
         self.agent_registry = AGENT_REGISTRY
@@ -29,20 +31,19 @@ class AurafluxEngine:
         Initialize the engine, ClientManager, and AgentRegistry.
 
         :raises RuntimeError: If the engine is already initialized.
+        :raises ValueError: If client_config is missing in the engine configuration.
         """
-        # We do not call _ensure_initialized here because the state transition
-        # is from False to True. If we called _ensure_initialized, which checks
-        # for True, the engine would never be able to initialize itself,
-        # creating a logical catch-22 situation for the initialization flow.
         if self._is_initialized:
             raise RuntimeError("AurafluxEngine has already been initialized.")
 
         try:
             # 1. Initialize ClientManager if configuration is provided
-            client_config = self.config.get("client_config")
-            if client_config:
-                self.client_manager = ClientManager(config=client_config)
-                await self.client_manager.initialize()
+            client_config = self.config.client_config if self.config else None
+            if not client_config:
+                raise ValueError("client_config is required in EngineConfig for AurafluxEngine initialization.")
+
+            self.client_manager = ClientManager(config=client_config)
+            await self.client_manager.initialize()
 
             # 2. AGENT_REGISTRY is already imported and statically available
 
@@ -128,7 +129,7 @@ class AurafluxEngine:
         orchestrator_type: str,
         initial_state: dict,
         agents_map: Optional[Dict[str, Any]] = None,
-        config: Optional[dict] = None,
+        config: Optional[OrchestratorConfig] = None,
     ) -> dict:
         """
         Execute an orchestrator by type with the given initial state.

@@ -8,6 +8,7 @@ from auraflux_core.core.orchestrators.state import (OrchestratorState,
                                                     OrchestratorStatus)
 from auraflux_core.core.orchestrators.strategies.base import \
     OrchestrationStrategy
+from auraflux_core.core.schemas.orchestrators import OrchestratorConfig
 from auraflux_core.core.tools.base_tool import BaseTool
 
 logger = get_logger(__name__)
@@ -23,7 +24,7 @@ class BaseOrchestrator:
         strategy: OrchestrationStrategy,
         tools: List[BaseTool],
         agents: Dict[str, Any],
-        config: Optional[Dict[str, Any]] = None
+        config: Optional[OrchestratorConfig] = None
     ):
         if not isinstance(agents, dict):
             raise TypeError(f"Agents must be a dictionary, got {type(agents)}")
@@ -34,7 +35,7 @@ class BaseOrchestrator:
         self.strategy = strategy
         self.tools = {tool.get_name(): tool for tool in tools}
         self.agents = agents
-        self.config = config or {}
+        self.config = config or OrchestratorConfig(client_config=None) # type: ignore
         self.state = OrchestratorState()
 
         logger.info(
