@@ -15,16 +15,21 @@ class MockStrategy(OrchestrationStrategy):
     async def execute(self, input_data, tools, agents, state):
         return state
 
-@pytest.mark.asyncio
-async def test_base_orchestrator_initialization():
+@pytest.fixture
+def mock_orchestrator_config():
     strategy = MockStrategy()
     tools = []
     agents = {"agent1": MagicMock()}
-    config = OrchestratorConfig(timeout=15.0, max_retries=2)
+    return OrchestratorConfig(strategy=strategy, tools=tools, agents=agents)
 
-    orchestrator = BaseOrchestrator(strategy=strategy, tools=tools, agents=agents, config=config)
-    assert orchestrator.strategy == strategy
-    assert orchestrator.agents == agents
+
+@pytest.mark.asyncio
+async def test_base_orchestrator_initialization(mock_orchestrator_config):
+    mock_orchestrator_config.timeout = 15.0
+    mock_orchestrator_config.max_retries = 2
+    orchestrator = BaseOrchestrator(config=mock_orchestrator_config)
+    assert orchestrator.strategy == mock_orchestrator_config.strategy
+    assert orchestrator.agents == mock_orchestrator_config.agents
     assert orchestrator.config.timeout == 15.0
     assert orchestrator.config.max_retries == 2
 
@@ -54,18 +59,12 @@ async def test_orchestrator_config_validation():
 async def test_base_orchestrator_invalid_agents():
     strategy = MockStrategy()
     tools = []
-    agents = ["invalid_type"]  # type: ignore
-
-    with pytest.raises(TypeError, match="Agents must be a dictionary"):
-        BaseOrchestrator(strategy=strategy, tools=tools, agents=agents)  # type: ignore
+    with pytest.raises(ValidationError):
+        OrchestratorConfig(strategy=strategy, tools=tools, agents=["invalid_type"])  # type: ignore
 
 @pytest.mark.asyncio
-async def test_base_orchestrator_run_success():
-    strategy = MockStrategy()
-    tools = []
-    agents = {"agent1": MagicMock()}
-
-    orchestrator = BaseOrchestrator(strategy=strategy, tools=tools, agents=agents)
+async def test_base_orchestrator_run_success(mock_orchestrator_config):
+    orchestrator = BaseOrchestrator(config=mock_orchestrator_config)
     state = await orchestrator.execute(input_data={"task": "do something"})
 
     assert orchestrator.state.status == OrchestratorStatus.COMPLETED

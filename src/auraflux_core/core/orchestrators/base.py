@@ -1,5 +1,5 @@
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -21,21 +21,21 @@ class BaseOrchestrator:
     """
     def __init__(
         self,
-        strategy: OrchestrationStrategy,
-        tools: List[BaseTool],
-        agents: Dict[str, Any],
-        config: Optional[OrchestratorConfig] = None
+        config: OrchestratorConfig
     ):
-        if not isinstance(agents, dict):
-            raise TypeError(f"Agents must be a dictionary, got {type(agents)}")
-        for key, value in agents.items():
+        self.config = config
+        self.strategy = config.strategy
+        tools_list = config.tools if config.tools is not None else []
+        self.tools = {tool.get_name(): tool for tool in tools_list}
+        self.agents = config.agents if config.agents is not None else {}
+
+        if not isinstance(self.agents, dict):
+            raise TypeError(f"Agents must be a dictionary, got {type(self.agents)}")
+        for key, value in self.agents.items():
             if not isinstance(key, str):
                 raise TypeError(f"Agent keys must be strings, got {type(key)}")
 
-        self.strategy = strategy
-        self.tools = {tool.get_name(): tool for tool in tools}
-        self.agents = agents
-        self.config = config or OrchestratorConfig()
+        self.config = config
         self.state = OrchestratorState()
 
         logger.info(
@@ -69,6 +69,10 @@ class BaseOrchestrator:
 
         try:
             # Delegate execution logic to the strategy
+            if self.strategy is None:
+                raise ValueError("Strategy is not defined in the configuration.")
+            if self.agents is None:
+                raise ValueError("Agents are not defined in the configuration.")
             final_state = await self.strategy.execute(
                 input_data=input_data,
                 tools=self.tools,

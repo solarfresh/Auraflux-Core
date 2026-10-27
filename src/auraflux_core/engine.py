@@ -157,10 +157,13 @@ class AurafluxEngine:
 
         try:
             strategy = impl.strategy_class(router=impl.router_class())
+            if config is None:
+                config = OrchestratorConfig()
+            config.strategy = strategy
+            if not config.agents:
+                config.agents = agents_map or {}
+
             orchestrator = impl.orchestrator_class(
-                strategy=strategy,
-                tools=[],
-                agents=agents_map or {},
                 config=config
             )
 
