@@ -165,11 +165,11 @@ class AurafluxWorkflowService:
         client_handler = self._get_client_handler(provider=provider, model_id=model_id)
         strategy = DualLayerAgenticStrategy(client_handler=client_handler)
 
-        agents_map = {}
+        agents = {}
         agent_types_to_load = required_agent_types or ["default"]
 
         for a_type in agent_types_to_load:
-            agents_map[a_type] = self._build_agent(
+            agents[a_type] = self._build_agent(
                 agent_type=a_type,
                 client_handler=client_handler,
                 system_prompt=f"You are an orchestrator sub-agent specialized in {a_type}.",
@@ -180,7 +180,7 @@ class AurafluxWorkflowService:
         orchestrator = BaseOrchestrator(
             strategy=strategy,
             tools=[],
-            agents=agents_map
+            agents=agents
         )
 
         result_state = await orchestrator.execute(input_data=objective)

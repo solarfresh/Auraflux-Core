@@ -5,6 +5,7 @@ import pytest
 
 from auraflux_core.core.schemas.clients import ClientConfig
 from auraflux_core.core.schemas.engine import EngineConfig
+from auraflux_core.core.schemas.orchestrators import OrchestratorConfig
 from auraflux_core.engine import AurafluxEngine
 
 
@@ -126,7 +127,7 @@ class TestAurafluxEngine:
             result = await engine.execute_orchestrator(
                 orchestrator_type="default",
                 initial_state={"messages": []},
-                agents_map={"dummy": MagicMock()}
+                config=OrchestratorConfig(agents={"dummy": MagicMock()})
             )
 
             assert isinstance(result, dict)

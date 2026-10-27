@@ -22,8 +22,8 @@ def mock_agent():
 @pytest.fixture
 def orchestrator(mock_agent):
     """Fixture initializing AlignmentOrchestrator with mapped agent."""
-    agents_map = {"ObjectiveClaimAgent": mock_agent}
-    config = OrchestratorConfig(agents=agents_map)
+    agents = {"ObjectiveClaimAgent": mock_agent}
+    config = OrchestratorConfig(agents=agents)
     return AlignmentOrchestrator(config=config)
 
 
