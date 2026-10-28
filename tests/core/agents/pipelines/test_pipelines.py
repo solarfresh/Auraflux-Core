@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.agents.base import BaseAgent
 from auraflux_core.core.agents.pipelines.direct import DirectPipeline
 from auraflux_core.core.agents.pipelines.plan_and_execute import (
     PlanAndExecuteHandler, PlanAndExecutePipeline)

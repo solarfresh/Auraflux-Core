@@ -11,7 +11,7 @@ from auraflux_core.core.schemas.messages import Message
 from auraflux_core.core.schemas.pipelines import ValidationResult
 
 if TYPE_CHECKING:
-    from auraflux_core.core.agents.base_agent import BaseAgent
+    from auraflux_core.core.agents.base import BaseAgent
 
 logger = get_logger(__name__)
 

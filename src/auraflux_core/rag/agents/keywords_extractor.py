@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
-from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.agents.base import BaseAgent
 from auraflux_core.core.agents.pipelines.plan_and_execute import \
     PlanAndExecuteHandler
 from auraflux_core.core.configs.logging_config import get_logger

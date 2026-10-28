@@ -8,7 +8,7 @@ import structlog
 from auraflux_core.core.configs.logging_config import get_logger
 
 if TYPE_CHECKING:
-    from auraflux_core.core.agents.base_agent import BaseAgent
+    from auraflux_core.core.agents.base import BaseAgent
 
 logger = get_logger(__name__)
 
