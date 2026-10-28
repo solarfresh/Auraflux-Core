@@ -84,3 +84,46 @@ def test_base_tool_executor_register_tools_formats(
     executor.tool_registry.clear()
     executor.register_tools({"tool_key": dummy_tool})
     assert "dummy_tool" in executor.tool_registry
+
+
+def test_agent_implementation_build_agent_success(
+    mock_client_manager, default_config
+):
+    """Verify build_agent returns agent instance with valid config."""
+    from auraflux_core.agents import AgentImplementation
+    from auraflux_core.core.agents.base import BaseAgent
+    from auraflux_core.core.schemas.agents import AgentConfig
+
+    def mock_agent_class(config, client_manager):
+        return MagicMock(spec=BaseAgent)
+
+    impl = AgentImplementation(agent_class=mock_agent_class, config_class=AgentConfig)
+    agent = impl.build_agent(default_config, mock_client_manager)
+    assert isinstance(agent, MagicMock)
+
+
+def test_agent_implementation_build_agent_raises_error_for_none_config(
+    mock_client_manager
+):
+    """Verify build_agent raises ValueError when config is None."""
+    from auraflux_core.agents import AgentImplementation
+    from auraflux_core.core.agents.base import BaseAgent
+    from auraflux_core.core.schemas.agents import AgentConfig
+
+    impl = AgentImplementation(agent_class=MagicMock(), config_class=AgentConfig)
+    with pytest.raises(ValueError, match="config cannot be None"):
+        impl.build_agent(None, mock_client_manager) # type: ignore
+
+
+def test_agent_implementation_build_agent_raises_error_for_invalid_config(
+    mock_client_manager
+):
+    """Verify build_agent raises ValueError for invalid config type."""
+    from auraflux_core.agents import AgentImplementation
+    from auraflux_core.core.schemas.agents import AgentConfig
+
+    impl = AgentImplementation(agent_class=MagicMock(), config_class=AgentConfig)
+    with pytest.raises(ValueError, match="config must be an instance of AgentConfig"):
+        # Use cast to ignore Pylance error
+        impl.build_agent(MagicMock(), mock_client_manager) # type: ignore
+

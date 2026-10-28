@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.agents.base import BaseAgent
 from auraflux_core.core.agents.pipelines.base import BaseAgentPipeline
 from auraflux_core.core.orchestrators.state import OrchestratorState
 from auraflux_core.core.schemas.agents import AgentConfig

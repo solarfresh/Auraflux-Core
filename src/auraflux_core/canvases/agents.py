@@ -2,7 +2,7 @@ import json
 from copy import deepcopy
 from typing import Dict, List
 
-from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.agents.base import BaseAgent
 from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.schemas.messages import Message
 

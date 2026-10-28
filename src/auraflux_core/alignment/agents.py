@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from auraflux_core.core.agents.base_agent import BaseAgent
+from auraflux_core.core.agents.base import BaseAgent
 
 
 class BaseAlignmentAgent(BaseAgent, ABC):

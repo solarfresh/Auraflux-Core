@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional
 
 from auraflux_core.agents import AGENT_REGISTRY
 from auraflux_core.core.clients.client_manager import ClientManager
+from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.engine import EngineConfig
 from auraflux_core.core.schemas.orchestrators import OrchestratorConfig
 from auraflux_core.orchestrators import ORCHESTRATOR_REGISTRY
@@ -76,53 +77,45 @@ class AurafluxEngine:
     async def execute_agent(
         self,
         agent_type: str,
-        prompt: str,
-        provider: Optional[str] = None,
-        model_id: Optional[str] = None,
-        prompt_config: Optional[Any] = None,
-        temperature: Optional[float] = None,
-    ) -> Any:
+        payload: Dict[str, Any],
+        config: AgentConfig,
+    ) -> Dict[str, Any]:
         """
-        Execute an agent by type with the given prompt and optional configuration overrides.
+        Execute an agent by type with the given payload and optional configuration.
 
         :param agent_type: The registered agent type string.
-        :param prompt: The input prompt for the agent.
-        :param provider: Optional LLM provider override.
-        :param model_id: Optional model ID override.
-        :param prompt_config: Optional prompt configuration override.
-        :param temperature: Optional temperature override.
-        :return: The execution result from the agent.
+        :param payload: The input payload dictionary for the agent execution.
+        :param config: Optional AgentConfig instance.
+        :return: A dictionary containing the status, result/error, and metadata.
         :raises RuntimeError: If the engine is not initialized.
-        :raises ValueError: If the agent_type is not registered.
+        :raises ValueError: If the agent_type is not registered or config is invalid.
         """
         self._ensure_initialized()
+        if self.client_manager is None:
+            raise RuntimeError("ClientManager must not be None after initialization.")
 
         agent_impl = self.agent_registry.get(agent_type)
         if not agent_impl:
             raise ValueError(f"Agent type '{agent_type}' is not registered in AGENT_REGISTRY.")
 
-        agent_class = agent_impl.agent_class
-        config_class = agent_impl.config_class
+        if config is None:
+            raise ValueError(f"config must be an instance of {config_class.__name__}")
 
-        # Build config kwargs based on config_class or default AgentConfig
-        config_kwargs: Dict[str, Any] = {
-            "name": agent_type,
-            "provider": provider or "openai",
-            "model": model_id or "gpt-4o",
-        }
-        if prompt_config:
-            config_kwargs["prompt_config"] = prompt_config
-        if temperature is not None:
-            if not (0.0 <= temperature <= 2.0):
-                raise ValueError(f"Temperature must be between 0.0 and 2.0, got {temperature}")
-            config_kwargs["temperature"] = temperature
+        try:
+            agent = agent_impl.build_agent(config=config, client_manager=self.client_manager)
+            result = await agent.execute(payload=payload)
 
-        agent_config = config_class(**config_kwargs)
-
-        # Instantiate agent
-        agent = agent_class(config=agent_config, client_manager=self.client_manager)
-
-        return await agent.execute(prompt=prompt)
+            return {
+                "status": "success",
+                "result": result,
+                "metadata": {"agent_type": agent_type},
+            }
+        except Exception as e:
+            return {
+                "status": "failed",
+                "error": str(e),
+                "metadata": {"agent_type": agent_type},
+            }
 
     async def execute_orchestrator(
         self,

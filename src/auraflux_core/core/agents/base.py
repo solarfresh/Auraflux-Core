@@ -10,6 +10,7 @@ from auraflux_core.core.clients.client_manager import ClientManager
 from auraflux_core.core.configs.logging_config import get_logger
 from auraflux_core.core.messages import PromptFormatter
 from auraflux_core.core.parsers import OutputParser
+from auraflux_core.core.protocols.clients import ClientManagerProtocol
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.clients import LLMRequest, LLMResponse
 from auraflux_core.core.schemas.messages import Message
@@ -25,7 +26,7 @@ class BaseAgent(ABC):
     Provides infrastructure capabilities (LLM clients, PromptFormatter, OutputParser, ToolExecutor)
     and delegates execution flow control to a stateless BasePipeline strategy.
     """
-    def __init__(self, config: AgentConfig, client_manager: ClientManager):
+    def __init__(self, config: AgentConfig, client_manager: ClientManagerProtocol):
         self.config = config
         self.client_manager = client_manager
 

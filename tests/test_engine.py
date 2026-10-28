@@ -54,7 +54,7 @@ class TestAurafluxEngine:
         engine = AurafluxEngine(config=mock_engine_config)
 
         with pytest.raises(RuntimeError, match="AurafluxEngine is not initialized."):
-            await engine.execute_agent(agent_type="test", prompt="hello")
+            await engine.execute_agent(agent_type="test", payload={"input": "hello"}, config=MagicMock())
 
     async def test_execute_agent_unknown_type_raises_error(self, mock_engine_config: EngineConfig):
         """Edge Case: Calling execute_agent with unknown type raises ValueError."""
@@ -62,56 +62,55 @@ class TestAurafluxEngine:
         await engine.initialize()
 
         with pytest.raises(ValueError, match="is not registered in AGENT_REGISTRY"):
-            await engine.execute_agent(agent_type="unknown", prompt="hello")
+            await engine.execute_agent(agent_type="unknown", payload={"input": "hello"}, config=MagicMock())
 
-    async def test_execute_agent_invalid_temperature_raises_error(self, mock_engine_config: EngineConfig):
-        """Edge Case: Calling execute_agent with out-of-bounds temperature raises ValueError."""
+    async def test_execute_agent_structured_success(self, mock_engine_config: EngineConfig):
+        """Happy Path: execute_agent returns structured success dictionary."""
         engine = AurafluxEngine(config=mock_engine_config)
         await engine.initialize()
 
         mock_agent_instance = MagicMock()
-        mock_agent_class = MagicMock(return_value=mock_agent_instance)
-        mock_config_class = MagicMock()
+        mock_agent_instance.execute = AsyncMock(return_value={"output": "success"})
 
-        mock_impl = MagicMock()
-        mock_impl.agent_class = mock_agent_class
-        mock_impl.config_class = mock_config_class
+        mock_agent = MagicMock()
+        mock_agent.build_agent = MagicMock(return_value=mock_agent_instance)
+        mock_agent.config_class = MagicMock
 
-        with patch.dict(engine.agent_registry, {"mock_agent": mock_impl}, clear=False):
-            with pytest.raises(ValueError, match="Temperature must be between 0.0 and 2.0"):
-                await engine.execute_agent(
-                    agent_type="mock_agent",
-                    prompt="test-prompt",
-                    temperature=2.5,
-                )
-
-    async def test_execute_agent_success(self, mock_engine_config: EngineConfig):
-        """Happy Path: Successful execution of an agent via execute_agent."""
-        engine = AurafluxEngine(config=mock_engine_config)
-        await engine.initialize()
-
-        mock_agent_instance = MagicMock()
-        mock_agent_instance.execute = AsyncMock(return_value="agent-response")
-
-        mock_agent_class = MagicMock(return_value=mock_agent_instance)
-        mock_config_class = MagicMock()
-
-        mock_impl = MagicMock()
-        mock_impl.agent_class = mock_agent_class
-        mock_impl.config_class = mock_config_class
-
-        with patch.dict(engine.agent_registry, {"mock_agent": mock_impl}, clear=False):
-            result = await engine.execute_agent(
+        with patch.dict(engine.agent_registry, {"mock_agent": mock_agent}, clear=False):
+            res = await engine.execute_agent(
                 agent_type="mock_agent",
-                prompt="test-prompt",
-                provider="openai",
-                model_id="gpt-4o",
-                temperature=0.5,
+                payload={"input": "test"},
+                config=MagicMock()
             )
 
-            assert result == "agent-response"
-            mock_agent_class.assert_called_once()
-            mock_agent_instance.execute.assert_awaited_once_with(prompt="test-prompt")
+            assert isinstance(res, dict)
+            assert res["status"] == "success"
+            assert res["result"] == {"output": "success"}
+            assert res["metadata"] == {"agent_type": "mock_agent"}
+
+    async def test_execute_agent_structured_error(self, mock_engine_config: EngineConfig):
+        """Edge Case: execute_agent catches exception and returns structured error dictionary."""
+        engine = AurafluxEngine(config=mock_engine_config)
+        await engine.initialize()
+
+        mock_agent_instance = MagicMock()
+        mock_agent_instance.execute = AsyncMock(side_effect=RuntimeError("Agent internal error"))
+
+        mock_agent = MagicMock()
+        mock_agent.build_agent = MagicMock(return_value=mock_agent_instance)
+        mock_agent.config_class = MagicMock
+
+        with patch.dict(engine.agent_registry, {"mock_agent": mock_agent}, clear=False):
+            res = await engine.execute_agent(
+                agent_type="mock_agent",
+                payload={"input": "test"},
+                config=MagicMock()
+            )
+
+            assert isinstance(res, dict)
+            assert res["status"] == "failed"
+            assert "Agent internal error" in res["error"]
+            assert res["metadata"] == {"agent_type": "mock_agent"}
 
     async def test_execute_orchestrator_success(self, mock_engine_config: EngineConfig):
         """Happy Path: Successful execution of an orchestrator via execute_orchestrator."""

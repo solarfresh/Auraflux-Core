@@ -1,4 +1,5 @@
-from typing import Any, Dict, NamedTuple, Type, Union
+from dataclasses import dataclass, field
+from typing import Callable, Dict, Optional, Type, Union
 
 from auraflux_core.alignment.mental_model.agents import MentalModelAgent
 from auraflux_core.alignment.objective_claim.agents import ObjectiveClaimAgent
@@ -7,7 +8,10 @@ from auraflux_core.canvases.agents import (GraphSynthesistAgent,
                                            KnowledgeArchitect, OntologyAuditor)
 from auraflux_core.canvases.schemas import (GraphSynthesistAgentConfig,
                                             SpatialLocateToolConfig)
-from auraflux_core.core.agents.generic_agent import GenericAgent
+from auraflux_core.core.agents.base import BaseAgent
+from auraflux_core.core.protocols.agents import AgentProtocol
+from auraflux_core.core.protocols.clients import ClientManagerProtocol
+from auraflux_core.core.protocols.tools import ToolProtocol
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.rag.agents.keywords_extractor import ExtractKeywordsAgent
 
@@ -21,15 +25,24 @@ Agent = Union[
     # TODO: the new interface.
     # GraphSynthesistAgent,
     # KnowledgeArchitect,
-    GenericAgent,
     # OntologyAuditor
 ]
 
 
-class AgentImplementation(NamedTuple):
-    agent_class: Type[Any]
-    config_class: Type[Any]
-    tool_config_mapping: Dict[str, Type[Any]] = {}
+@dataclass
+class AgentImplementation:
+    agent_class: Callable[[AgentConfig, ClientManagerProtocol], AgentProtocol]
+    config_class: Type[AgentConfig]
+    tool_config_mapping: Dict[str, ToolProtocol] = field(default_factory=dict)
+
+    def build_agent(self, config: AgentConfig, client_manager: ClientManagerProtocol) -> AgentProtocol:
+        if config is None:
+            raise ValueError("config cannot be None; AgentConfig requires mandatory fields (name, provider, model)")
+
+        if not isinstance(config, self.config_class):
+            raise ValueError(f"config must be an instance of {self.config_class.__name__}")
+
+        return self.agent_class(config, client_manager)
 
 # Central Registry
 AGENT_REGISTRY: Dict[str, AgentImplementation] = {
@@ -68,7 +81,7 @@ AGENT_REGISTRY: Dict[str, AgentImplementation] = {
     # ),
     # Default fallback or other agents
     'default': AgentImplementation(
-        agent_class=GenericAgent,
+        agent_class=BaseAgent,
         config_class=AgentConfig
     )
 }
