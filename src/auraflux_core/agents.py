@@ -37,7 +37,7 @@ class AgentImplementation:
 
     def build_agent(self, config: AgentConfig, client_manager: ClientManagerProtocol) -> AgentProtocol:
         if config is None:
-            raise ValueError("config cannot be None")
+            raise ValueError("config cannot be None; AgentConfig requires mandatory fields (name, provider, model)")
 
         if not isinstance(config, self.config_class):
             raise ValueError(f"config must be an instance of {self.config_class.__name__}")
