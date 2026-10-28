@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 from typing import Dict, List, Optional
 
 from pydantic import (BaseModel, ConfigDict, Field, PlainValidator,
                       field_validator)
 from typing_extensions import Annotated
 
-from ..protocols import (AgentProtocol, OrchestrationStrategyProtocol,
-                         ToolProtocol)
+from auraflux_core.core.protocols.agents import AgentProtocol
+from auraflux_core.core.protocols.orchestrators import \
+    OrchestrationStrategyProtocol
+from auraflux_core.core.protocols.tools import ToolProtocol
 
 
 class OrchestratorConfig(BaseModel):
