@@ -197,9 +197,9 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
         if agent_pipeline is None:
             raise AgentPipelineError(f"Agent '{agent_name}' does not have a valid bound pipeline.")
 
-        pipeline_getter = getattr(agent_pipeline, "get_run_pipeline", None)
+        pipeline_getter = getattr(agent_pipeline, "get_execute_pipeline", None)
         if not callable(pipeline_getter):
-            raise AgentPipelineError(f"Pipeline for agent '{agent_name}' must implement callable 'get_run_pipeline'.")
+            raise AgentPipelineError(f"Pipeline for agent '{agent_name}' must implement callable 'get_execute_pipeline'.")
 
         raw_steps = pipeline_getter(payload=input_data)
         execution_steps = cast(List[Dict[str, Any]], raw_steps)

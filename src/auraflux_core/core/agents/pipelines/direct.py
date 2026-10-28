@@ -16,15 +16,15 @@ class DirectPipeline(BaseAgentPipeline):
     Completely decoupled and universal with zero handler requirements.
     """
 
-    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def get_execute_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Declares a single direct execution step for Strategy dispatching.
         """
         return [
-            {"method_name": "_run_pipeline", "kwargs": {"payload": payload}}
+            {"method_name": "_execute_pipeline", "kwargs": {"payload": payload}}
         ]
 
-    async def _run_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any], **kwargs) -> Any:
+    async def _execute_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any], **kwargs) -> Any:
         if "messages" in payload and isinstance(payload["messages"], list):
             messages = payload["messages"]
         elif "prompt" in payload:

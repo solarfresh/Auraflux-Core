@@ -204,20 +204,20 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
     Supports dynamic hook detection for automatic stage bypassing.
     """
 
-    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def get_execute_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Declares the sequence of fine-grained execution steps and their arguments
         for Strategy dispatch, keeping handlers and pipelines completely agnostic of OrchestratorState.
         """
         return [
             {"method_name": "_execute_planning_stage", "kwargs": {"payload": payload}},
-            {"method_name": "_run_pre_execution_validation_loop", "kwargs": {"payload": payload}},
+            {"method_name": "_execute_pre_execution_validation_loop", "kwargs": {"payload": payload}},
             {"method_name": "_execute_tool_workflow_stage", "kwargs": {"payload": payload}},
             {"method_name": "_execute_synthesis_stage", "kwargs": {"payload": payload}},
             {"method_name": "_verify_post_synthesis_boundary", "kwargs": {"payload": payload}}
         ]
 
-    async def _run_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
+    async def _execute_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
         if not isinstance(agent, PlanAndExecuteHandler):
             logger.error(
                 "invalid_agent_interface",
@@ -232,7 +232,7 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
 
         # Stage 1.5: Pre-Execution Validation & Reflection Loop
         structlog.contextvars.bind_contextvars(stage_name="pre_execution_validation")
-        refined_plan_output = await self._run_pre_execution_validation_loop(agent, payload, plan_output)
+        refined_plan_output = await self._execute_pre_execution_validation_loop(agent, payload, plan_output)
 
         # Stage 2: Code-Controlled Tool Execution Workflow
         structlog.contextvars.bind_contextvars(stage_name="tool_workflow")
@@ -274,7 +274,7 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         logger.info("stage_completed", latency_sec=round(latency_sec, 4))
         return parsed_plan
 
-    async def _run_pre_execution_validation_loop(
+    async def _execute_pre_execution_validation_loop(
         self, agent: "BaseAgent", payload: Dict[str, Any], initial_plan: Dict[str, Any]
     ) -> Dict[str, Any]:
         """

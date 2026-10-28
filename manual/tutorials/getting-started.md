@@ -38,6 +38,8 @@ To ensure a smooth learning curve, follow this recommended progression path when
    - **[Basic Agent Tutorial (`basic-agent-tutorial.md`)](./basic-agent-tutorial.md)**: Learn how to initialize client managers, configure prompts, and execute individual agents.
 2. **Phase 2: Workflow Orchestration**
    - **[Orchestrator Tutorial (`orchestrator-tutorial.md`)](./orchestrator-tutorial.md)**: Master how to wrap and coordinate agents and tools into structured orchestrators using `BaseOrchestrator`.
-3. **Phase 3: Advanced Modules & Integration**
+3. **Phase 3: High-Level Engine Entry Point**
+   - **[Auraflux Engine Tutorial (`engine-tutorial.md`)](./engine-tutorial.md)**: Explore [`AurafluxEngine`](src/auraflux_core/engine.py:11) as a high-level entry point integrating `ClientManager`, `AGENT_REGISTRY`, and `ORCHESTRATOR_REGISTRY`.
+4. **Phase 4: Advanced Modules & Integration**
    - **[Core Module Usage (`usage.md`)](./usage.md)**: Dive deeper into core components, client management, alignment strategies, and RAG pipelines.
    - **[Backend Integration Guide (`backend-integration.md`)](./backend-integration.md)**: Learn how to share and invoke Agents and Orchestrators cleanly inside web backend services (such as FastAPI).
