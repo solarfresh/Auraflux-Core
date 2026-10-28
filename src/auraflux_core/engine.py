@@ -128,7 +128,6 @@ class AurafluxEngine:
         self,
         orchestrator_type: str,
         initial_state: dict,
-        agents_map: Optional[Dict[str, Any]] = None,
         config: Optional[OrchestratorConfig] = None,
     ) -> dict:
         """
@@ -136,7 +135,6 @@ class AurafluxEngine:
 
         :param orchestrator_type: The orchestrator type string.
         :param initial_state: The initial state dictionary.
-        :param agents_map: Optional agents mapping.
         :param config: Optional execution configuration.
         :return: A dictionary containing the final state and metadata.
         :raises RuntimeError: If the engine is not initialized.
@@ -156,13 +154,7 @@ class AurafluxEngine:
             raise ValueError(f"Orchestrator type '{orchestrator_type}' is not supported.")
 
         try:
-            strategy = impl.strategy_class(router=impl.router_class())
-            orchestrator = impl.orchestrator_class(
-                strategy=strategy,
-                tools=[],
-                agents=agents_map or {},
-                config=config
-            )
+            orchestrator = impl.build_orchestrator(config=config)
 
             final_state = await orchestrator.execute(input_data=initial_state)
 

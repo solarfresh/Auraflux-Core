@@ -8,6 +8,7 @@ from auraflux_core.alignment.objective_claim.schemas import (
 from auraflux_core.alignment.orchestrators import AlignmentOrchestrator
 from auraflux_core.alignment.schemas import TripleItem
 from auraflux_core.core.orchestrators.state import OrchestratorStatus
+from auraflux_core.core.schemas.orchestrators import OrchestratorConfig
 
 
 @pytest.fixture
@@ -21,8 +22,9 @@ def mock_agent():
 @pytest.fixture
 def orchestrator(mock_agent):
     """Fixture initializing AlignmentOrchestrator with mapped agent."""
-    agents_map = {"ObjectiveClaimAgent": mock_agent}
-    return AlignmentOrchestrator(agents=agents_map)
+    agents = {"ObjectiveClaimAgent": mock_agent}
+    config = OrchestratorConfig(agents=agents)
+    return AlignmentOrchestrator(config=config)
 
 
 @pytest.mark.asyncio
