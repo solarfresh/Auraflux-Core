@@ -1,6 +1,11 @@
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (BaseModel, ConfigDict, Field, PlainValidator,
+                      field_validator)
+from typing_extensions import Annotated
+
+from ..protocols import (AgentProtocol, OrchestrationStrategyProtocol,
+                         ToolProtocol)
 
 
 class OrchestratorConfig(BaseModel):
@@ -8,9 +13,9 @@ class OrchestratorConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
-    strategy: Optional[Any] = None
-    tools: Optional[List[Any]] = None
-    agents: Optional[Dict[str, Any]] = None
+    strategy: Optional[Annotated[OrchestrationStrategyProtocol, PlainValidator(lambda x: x)]] = None
+    tools: Optional[List[Annotated[ToolProtocol, PlainValidator(lambda x: x)]]] = None
+    agents: Optional[Dict[str, Annotated[AgentProtocol, PlainValidator(lambda x: x)]]] = None
     timeout: Optional[float] = Field(default=30.0, description="Workflow execution timeout in seconds.")
     max_retries: Optional[int] = Field(default=3, description="Maximum number of retries.")
 
