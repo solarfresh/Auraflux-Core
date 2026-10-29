@@ -11,7 +11,7 @@ The `core` module handles client management and execution pipelines.
 
 ```python
 from auraflux_core.core.clients.client_manager import ClientManager
-from auraflux_core.core.agents.generic_agent import GenericAgent
+from auraflux_core.core.agents.base import BaseAgent
 
 # Initialize client and agent example usage
 ```

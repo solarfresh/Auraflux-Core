@@ -8,6 +8,7 @@ Welcome to the **Auraflux-Core** framework operation manual. This manual is desi
    - [Getting Started (`getting-started.md`)](./tutorials/getting-started.md): Environment requirements, installation steps, and quick validation.
    - [Basic Agent Tutorial (`basic-agent-tutorial.md`)](./tutorials/basic-agent-tutorial.md): Introduction to creating and running basic agents.
    - [Orchestrator Tutorial (`orchestrator-tutorial.md`)](./tutorials/orchestrator-tutorial.md): Core design principles and basic usage of Orchestrators.
+   - [Engine Tutorial (`engine-tutorial.md`)](./tutorials/engine-tutorial.md): Core concepts, usage, and configuration of the execution Engine.
    - [Core Module Usage (`usage.md`)](./tutorials/usage.md): `core` components, client management, `alignment`, and `rag` modules.
    - [Backend Integration Guide (`backend-integration.md`)](./tutorials/backend-integration.md): Best practices for sharing and invoking Agents and Orchestrators in web backend services.
 2. [Concepts (`concepts/`)](./concepts/)

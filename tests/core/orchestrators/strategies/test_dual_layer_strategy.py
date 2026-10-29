@@ -24,7 +24,7 @@ async def test_dual_layer_strategy_full_execution(
 ) -> None:
     """
     Validates that DualLayerAgenticStrategy successfully resolves the router,
-    retrieves execution steps from agent.pipeline.get_run_pipeline(), and dispatches them
+    retrieves execution steps from agent.pipeline.get_execute_pipeline(), and dispatches them
     in complete isolation with fine-grained assertions, including callback transport and status lifecycle.
     """
     class IsolatedMockAgent:
@@ -132,7 +132,7 @@ async def test_failed_resume_and_attempt_counting():
     mock_agent.step_one = step_one
     mock_agent.step_two = step_two
 
-    mock_agent.pipeline.get_run_pipeline.return_value = [
+    mock_agent.pipeline.get_execute_pipeline.return_value = [
         {"method_name": "step_one", "kwargs": {}},
         {"method_name": "step_two", "kwargs": {}}
     ]
@@ -194,7 +194,7 @@ async def test_corrupted_checkpoint_validation():
 
     mock_agent = MagicMock()
     mock_agent.pipeline = MagicMock()
-    mock_agent.pipeline.get_run_pipeline.return_value = [{"method_name": "step_one", "kwargs": {}}]
+    mock_agent.pipeline.get_execute_pipeline.return_value = [{"method_name": "step_one", "kwargs": {}}]
 
     strategy = DualLayerAgenticStrategy(router=mock_router, checkpoint_port=mock_checkpoint_port)
 
@@ -224,7 +224,7 @@ async def test_unserializable_object_fallback():
             return file_handle
 
         mock_agent.bad_step = bad_step
-        mock_agent.pipeline.get_run_pipeline.return_value = [{"method_name": "bad_step", "kwargs": {}}]
+        mock_agent.pipeline.get_execute_pipeline.return_value = [{"method_name": "bad_step", "kwargs": {}}]
 
         strategy = DualLayerAgenticStrategy(router=mock_router, checkpoint_port=mock_checkpoint_port)
         state = OrchestratorState(session_id="sess_test_4")
@@ -297,7 +297,7 @@ async def test_cursor_binding_and_state_tracking():
             return {"output": "b"}
 
     mock_pipeline = MagicMock()
-    mock_pipeline.get_run_pipeline.return_value = [
+    mock_pipeline.get_execute_pipeline.return_value = [
         {"method_name": "step_a", "kwargs": {}},
         {"method_name": "step_b", "kwargs": {}}
     ]
@@ -372,7 +372,7 @@ async def test_multi_agent_resume_cursor_isolation():
         def __init__(self, steps: list):
             self.steps = steps
 
-        def get_run_pipeline(self, **kwargs):
+        def get_execute_pipeline(self, **kwargs):
             return self.steps
 
     class MultiAgentMock:
@@ -449,12 +449,12 @@ async def test_boundary_failure_between_agents():
     mock_checkpoint_port = AsyncMock()
 
     agent_a = MagicMock()
-    agent_a.pipeline.get_run_pipeline.return_value = [{"method_name": "step_a1"}]
+    agent_a.pipeline.get_execute_pipeline.return_value = [{"method_name": "step_a1"}]
     async def mock_a1(**kwargs): return "ok_a"
     agent_a.step_a1 = mock_a1
 
     agent_b = MagicMock()
-    agent_b.pipeline.get_run_pipeline.return_value = [{"method_name": "step_b1"}]
+    agent_b.pipeline.get_execute_pipeline.return_value = [{"method_name": "step_b1"}]
     async def mock_b1(**kwargs): raise RuntimeError("Fail on Agent B start")
     agent_b.step_b1 = mock_b1
 
@@ -489,7 +489,7 @@ async def test_attempt_count_persistence_on_resume():
     mock_checkpoint_port.load.return_value = state.dump_checkpoint()
 
     agent_a = MagicMock()
-    agent_a.pipeline.get_run_pipeline.return_value = [{"method_name": "step_a1"}]
+    agent_a.pipeline.get_execute_pipeline.return_value = [{"method_name": "step_a1"}]
 
     async def fail_step(**kwargs): raise RuntimeError("Still failing")
     agent_a.step_a1 = fail_step
@@ -550,7 +550,7 @@ async def test_concurrent_execution_race_condition() -> None:
     class SlowMockAgent:
         def __init__(self):
             self.pipeline = MagicMock()
-            self.pipeline.get_run_pipeline.return_value = [{"method_name": "slow_step", "kwargs": {}}]
+            self.pipeline.get_execute_pipeline.return_value = [{"method_name": "slow_step", "kwargs": {}}]
 
         async def slow_step(self, **kwargs):
             await asyncio.sleep(0.1)

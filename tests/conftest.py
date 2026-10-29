@@ -28,10 +28,10 @@ DEFAULT_AGENT_PARAMS = {
 class DummyPipeline(BaseAgentPipeline):
     """Reusable DummyPipeline for testing pipeline execution and registry."""
 
-    async def _run_pipeline(self, agent: Any, payload: Dict[str, Any]) -> Any:
+    async def _execute_pipeline(self, agent: Any, payload: Dict[str, Any]) -> Any:
         return {"status": "success", "payload": payload}
 
-    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def get_execute_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Declares dummy fine-grained execution steps for testing purposes."""
         return [
             {"method_name": "_dummy_step", "kwargs": {"payload": payload}}
@@ -41,10 +41,10 @@ class DummyPipeline(BaseAgentPipeline):
 class DummyPipelineForStrategy(BaseAgentPipeline):
     """Dummy pipeline providing fine-grained steps for strategy execution testing."""
 
-    async def _run_pipeline(self, agent: Any, payload: Dict[str, Any]) -> Any:
+    async def _execute_pipeline(self, agent: Any, payload: Dict[str, Any]) -> Any:
         return {"status": "success", "payload": payload}
 
-    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def get_execute_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [
             {"method_name": "step_one", "kwargs": {"extra": "val_1"}},
             {"method_name": "step_two", "kwargs": {}},

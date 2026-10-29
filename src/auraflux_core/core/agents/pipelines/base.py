@@ -44,7 +44,7 @@ class BaseAgentPipeline(ABC):
         )
 
         try:
-            result = await self._run_pipeline(agent, payload)
+            result = await self._execute_pipeline(agent, payload)
             latency_sec = time.perf_counter() - start_time
 
             logger.info(
@@ -69,7 +69,7 @@ class BaseAgentPipeline(ABC):
             )
 
     @abstractmethod
-    async def _run_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
+    async def _execute_pipeline(self, agent: "BaseAgent", payload: Dict[str, Any]) -> Any:
         """
         Internal implementation of specialized pipeline execution.
         Subclasses must implement this method instead of overriding execute().
@@ -77,7 +77,7 @@ class BaseAgentPipeline(ABC):
         pass
 
     @abstractmethod
-    def get_run_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def get_execute_pipeline(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Declares the sequence of fine-grained execution steps and their dispatch arguments
         for Orchestration Strategy handling.
