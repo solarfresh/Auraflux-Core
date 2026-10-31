@@ -11,7 +11,7 @@ When embedding Auraflux inside an enterprise backend, adhere to the following ar
 1. **Centralized Engine Entry Point (`AurafluxEngine`)**: Use [`AurafluxEngine`](../../src/auraflux_core/engine.py:11) as the high-level facade to coordinate [`ClientManager`](../../src/auraflux_core/core/clients/client_manager.py), [`AGENT_REGISTRY`](../../src/auraflux_core/agents.py), and [`ORCHESTRATOR_REGISTRY`](../../src/auraflux_core/orchestrators.py).
 2. **Defensive Initialization Guard**: Always await `engine.initialize()` during application startup and rely on `_ensure_initialized()` to block uninitialized executions.
 3. **Singleton Lifecycle & FastAPI Lifespan Management**: Initialize [`AurafluxEngine`](../../src/auraflux_core/engine.py:11) using FastAPI's application `lifespan` event handler to manage connection pooling, graceful startup, and teardown, avoiding re-instantiating LLM providers on every request.
-4. **Unified Execution Methods**: Execute registered agents via `await engine.execute_agent(agent_type, payload, config)` and orchestrators via `await engine.execute_orchestrator(orchestrator_type, initial_state, config)`.
+4. **Unified Execution Methods**: Execute registered agents via `await engine.execute_agent(agent_type, payload, config)` and orchestrators via `await engine.execute_orchestrator(orchestrator_type, payload, config)`.
 5. **Service Layer Abstraction**: Encapsulate Engine invocation logic within dedicated Service classes (e.g., `AurafluxWorkflowService`) so that API controllers remain thin and testable.
 6. **Asynchronous Execution (`async/await`)**: Leverage Python's asynchronous model for non-blocking LLM inference and tool execution.
 
@@ -98,14 +98,14 @@ class AurafluxWorkflowService:
     async def execute_orchestrator(
         self,
         orchestrator_type: str,
-        initial_state: Dict[str, Any],
+        payload: Dict[str, Any],
         config: Optional[OrchestratorConfig] = None
     ) -> Dict[str, Any]:
         """Execute an orchestrator via AurafluxEngine."""
         orchestrator_config = config or OrchestratorConfig(timeout=60.0, max_retries=3)
         return await self.engine.execute_orchestrator(
             orchestrator_type=orchestrator_type,
-            initial_state=initial_state,
+            payload=payload,
             config=orchestrator_config
         )
 ```
@@ -162,7 +162,7 @@ async def execute_workflow_endpoint(
         elif req.execution_type == "orchestrator":
             result = await service.execute_orchestrator(
                 orchestrator_type=req.target_type,
-                initial_state=req.payload,
+                payload=req.payload,
                 config=req.orchestrator_config
             )
         else:

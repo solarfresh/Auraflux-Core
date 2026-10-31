@@ -86,7 +86,7 @@ async def test_orchestrator_execute_all_verified(orchestrator, mock_agent):
     mock_agent.diagnose_and_verify.side_effect = [verdict_1, verdict_2]
 
     # Act
-    final_state = await orchestrator.execute(input_data=claims_input)
+    final_state = await orchestrator.execute(payload=claims_input)
 
     # Assert
     assert final_state.status == OrchestratorStatus.COMPLETED
@@ -127,7 +127,7 @@ async def test_orchestrator_execute_with_unsupported_triggers_block(orchestrator
     mock_agent.diagnose_and_verify.side_effect = [verdict_1, verdict_2]
 
     # Act
-    final_state = await orchestrator.execute(input_data=claims_input)
+    final_state = await orchestrator.execute(payload=claims_input)
 
     # Assert
     assert final_state.status == OrchestratorStatus.COMPLETED
@@ -144,7 +144,7 @@ async def test_orchestrator_handles_empty_or_unmatched_claims(orchestrator):
     ]
 
     # Act
-    final_state = await orchestrator.execute(input_data=claims_input)
+    final_state = await orchestrator.execute(payload=claims_input)
 
     # Assert
     assert final_state.status == OrchestratorStatus.COMPLETED

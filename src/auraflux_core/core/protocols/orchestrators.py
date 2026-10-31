@@ -4,7 +4,7 @@ from typing import Any, Dict, Iterable, Optional, Protocol
 class OrchestrationStrategyProtocol(Protocol):
     async def execute(
         self,
-        input_data: Any,
+        payload: Any,
         tools: Dict[str, Any],
         agents: Dict[str, Any],
         state: Any

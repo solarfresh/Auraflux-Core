@@ -29,7 +29,7 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
 
     async def execute(
         self,
-        input_data: List[Dict[str, Any]],
+        payload: List[Dict[str, Any]],
         tools: Dict[str, Any],
         agents: Dict[str, BaseAlignmentAgent],
         state: OrchestratorState
@@ -40,7 +40,7 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
             target_agent_keys=set(self.agent_mapping.values())
         )
 
-        tasks = self._dispatch_claim_tasks(input_data, agents)
+        tasks = self._dispatch_claim_tasks(payload, agents)
         if not tasks:
             state.metadata["verdicts"] = []
             state.metadata["is_locked"] = True
@@ -73,12 +73,12 @@ class AlignmentOrchestrationStrategy(OrchestrationStrategy):
     # ----------------------------------------------------------------------
 
     def _dispatch_claim_tasks(
-        self, input_data: List[Dict[str, Any]], agents: Dict[str, BaseAlignmentAgent]
+        self, payload: List[Dict[str, Any]], agents: Dict[str, BaseAlignmentAgent]
     ) -> List[asyncio.Task[Any]]:
         """Routes claims to agents and dispatches async tasks."""
         tasks: List[asyncio.Task[Any]] = []
 
-        for claim in input_data:
+        for claim in payload:
             claim_type = claim.get("type", "")
             claim_id = claim.get("id", "")
             claim_text = claim.get("text", "")

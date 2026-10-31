@@ -46,12 +46,12 @@ async def test_alignment_orchestration_tool_registration(
     agents = {"ObjectiveClaimAgent": mock_agent}
     strategy = AlignmentOrchestrationStrategy()
 
-    input_data = [
+    payload = [
         {"type": "objective_claim", "id": "c1", "text": "Medical claim"}
     ]
 
     await strategy.execute(
-        input_data=input_data, tools=tools, agents=agents, state=initial_state
+        payload=payload, tools=tools, agents=agents, state=initial_state
     )
 
     mock_agent.register_tools.assert_called_once_with(tools)
@@ -63,12 +63,12 @@ async def test_alignment_orchestration_dynamic_routing(mock_agent, initial_state
     agents = {"ObjectiveClaimAgent": mock_agent}
     strategy = AlignmentOrchestrationStrategy()
 
-    input_data = [
+    payload = [
         {"type": "objective_claim", "id": "c1", "text": "Verify claim text"}
     ]
 
     result_state = await strategy.execute(
-        input_data=input_data, tools={}, agents=agents, state=initial_state
+        payload=payload, tools={}, agents=agents, state=initial_state
     )
 
     mock_agent.diagnose_and_verify.assert_called_once_with(
@@ -93,12 +93,12 @@ async def test_alignment_orchestration_unsupported_blocks(
     agents = {"ObjectiveClaimAgent": mock_agent}
     strategy = AlignmentOrchestrationStrategy()
 
-    input_data = [
+    payload = [
         {"type": "objective_claim", "id": "c2", "text": "Unsupported text"}
     ]
 
     result_state = await strategy.execute(
-        input_data=input_data, tools={}, agents=agents, state=initial_state
+        payload=payload, tools={}, agents=agents, state=initial_state
     )
 
     assert result_state.metadata["is_locked"] is False
@@ -112,13 +112,13 @@ async def test_alignment_orchestration_unmapped_claim_type_handling(
     agents = {"ObjectiveClaimAgent": mock_agent}
     strategy = AlignmentOrchestrationStrategy()
 
-    input_data = [
+    payload = [
         {"type": "unknown_claim_type", "id": "c3", "text": "Unmapped text"}
     ]
 
     with caplog.at_level(logging.WARNING):
         result_state = await strategy.execute(
-            input_data=input_data, tools={}, agents=agents, state=initial_state
+            payload=payload, tools={}, agents=agents, state=initial_state
         )
 
     mock_agent.diagnose_and_verify.assert_not_called()

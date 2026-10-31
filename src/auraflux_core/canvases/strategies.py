@@ -25,11 +25,11 @@ class AgenticStrategy(OrchestrationStrategy):
         self.max_retries = max_retries
 
     async def execute(
-        self, input_data: Any, tools: Dict[str, Any], agents: Dict[str, Any], state: OrchestratorState
+        self, payload: Any, tools: Dict[str, Any], agents: Dict[str, Any], state: OrchestratorState
     ) -> OrchestratorState:
 
         # 1. Ingestion
-        ingest_res = await self.dispatch(state, "file_reader", tools, file_path=input_data)
+        ingest_res = await self.dispatch(state, "file_reader", tools, file_path=payload)
         units = ingest_res.get("chunks") or []
 
         state.update_status(OrchestratorStatus.PROCESSING)
@@ -175,7 +175,7 @@ class SequentialStrategy(OrchestrationStrategy):
 
     async def execute(
         self,
-        input_data: Any,
+        payload: Any,
         tools: Dict[str, Any],
         agents: Dict[str, Any],
         state: OrchestratorState
@@ -187,7 +187,7 @@ class SequentialStrategy(OrchestrationStrategy):
             state,
             self.ingestion_tool,
             tools,
-            file_path=input_data
+            file_path=payload
         )
         units = ingest_res.get("chunks") or ingest_res.get("units") or []
 

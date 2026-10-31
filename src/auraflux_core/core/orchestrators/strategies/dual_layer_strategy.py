@@ -160,7 +160,7 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
         self,
         state: OrchestratorState,
         agents: Dict[str, Any],
-        input_data: Any,
+        payload: Any,
         last_result: Any,
         cursor: ExecutionCursor
     ) -> Tuple[Optional[str], List[Dict[str, Any]]]:
@@ -201,7 +201,7 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
         if not callable(pipeline_getter):
             raise AgentPipelineError(f"Pipeline for agent '{agent_name}' must implement callable 'get_execute_pipeline'.")
 
-        raw_steps = pipeline_getter(payload=input_data)
+        raw_steps = pipeline_getter(payload=payload)
         execution_steps = cast(List[Dict[str, Any]], raw_steps)
 
         if cursor.completed_steps_count < 0 or cursor.completed_steps_count > len(execution_steps):
@@ -221,7 +221,7 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
         agents: Dict[str, Any],
         agent_name: str,
         execution_steps: List[Dict[str, Any]],
-        input_data: Any,
+        payload: Any,
         remaining_to_skip: int
     ) -> Tuple[Any, bool]:
         """
@@ -245,7 +245,7 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
                 raise TypeError(f"Pipeline step 'kwargs' must be a dictionary, got {type(step_kwargs_raw).__name__}.")
 
             step_kwargs = {**step_kwargs_raw}
-            step_kwargs.setdefault("payload", input_data)
+            step_kwargs.setdefault("payload", payload)
 
             if self.callback_port:
                 try:
@@ -308,7 +308,7 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
 
     async def execute(
         self,
-        input_data: Any,
+        payload: Any,
         tools: Optional[Dict[str, Any]],
         agents: Dict[str, Any],
         state: OrchestratorState
@@ -331,13 +331,13 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
             try:
                 while cursor.macro_iteration < MAX_ORCHESTRATION_ITERATIONS:
                     agent_name, execution_steps = await self._resolve_agent_and_pipeline(
-                        state, agents, input_data, last_result, cursor
+                        state, agents, payload, last_result, cursor
                     )
                     if not agent_name:
                         break
 
                     last_result, finished = await self._process_agent_steps(
-                        state, agents, agent_name, execution_steps, input_data, cursor.completed_steps_count
+                        state, agents, agent_name, execution_steps, payload, cursor.completed_steps_count
                     )
                     if finished:
                         break
@@ -373,7 +373,7 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
         router: BaseAgentRouter,
         agents: Dict[str, Any],
         callback_port: Optional[OrchestrationCallbackPort] = None,
-        input_data: Any = None,
+        payload: Any = None,
         tools: Optional[Dict[str, Any]] = None
     ) -> Tuple['DualLayerAgenticStrategy', OrchestratorState]:
         """
@@ -411,7 +411,7 @@ class DualLayerAgenticStrategy(OrchestrationStrategy):
         # Proceed execution only for valid resumable statuses
         if state.status in (OrchestratorStatus.PROCESSING, OrchestratorStatus.FAILED):
             await strategy.execute(
-                input_data=input_data,
+                payload=payload,
                 tools=tools or {},
                 agents=agents,
                 state=state
