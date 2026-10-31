@@ -166,4 +166,93 @@ class TestAurafluxEngine:
                 config="invalid_config" # type: ignore
             )
 
+    async def test_execute_embedding_success_single(self, mock_engine_config: EngineConfig):
+        """Happy Path: execute_embedding with single text."""
+        engine = AurafluxEngine(config=mock_engine_config)
+        await engine.initialize()
+
+        mock_embedding_instance = MagicMock()
+        mock_embedding_instance.embed_query = AsyncMock(return_value=[0.1, 0.2, 0.3])
+
+        mock_embedding = MagicMock()
+        mock_embedding.embedding_class = MagicMock(return_value=mock_embedding_instance)
+
+        with patch.dict("auraflux_core.engine.EMBEDDING_REGISTRY", {"default": mock_embedding}, clear=False):
+            res = await engine.execute_embedding(
+                embedding_type="default",
+                payload={"text": "hello world"},
+                config=MagicMock()
+            )
+
+            assert isinstance(res, dict)
+            assert res["status"] == "success"
+            assert res["result"] == [0.1, 0.2, 0.3]
+            assert res["metadata"] == {"embedding_type": "default"}
+
+    async def test_execute_embedding_success_batch(self, mock_engine_config: EngineConfig):
+        """Happy Path: execute_embedding with batch texts."""
+        engine = AurafluxEngine(config=mock_engine_config)
+        await engine.initialize()
+
+        mock_embedding_instance = MagicMock()
+        mock_embedding_instance.embed_documents = AsyncMock(return_value=[[0.1, 0.2], [0.3, 0.4]])
+
+        mock_embedding = MagicMock()
+        mock_embedding.embedding_class = MagicMock(return_value=mock_embedding_instance)
+
+        with patch.dict("auraflux_core.engine.EMBEDDING_REGISTRY", {"default": mock_embedding}, clear=False):
+            res = await engine.execute_embedding(
+                embedding_type="default",
+                payload={"texts": ["hello", "world"]},
+                config=MagicMock()
+            )
+
+            assert isinstance(res, dict)
+            assert res["status"] == "success"
+            assert res["result"] == [[0.1, 0.2], [0.3, 0.4]]
+            assert res["metadata"] == {"embedding_type": "default"}
+
+    async def test_execute_embedding_uninitialized(self, mock_engine_config: EngineConfig):
+        """Edge Case: Calling execute_embedding before initialization raises RuntimeError."""
+        engine = AurafluxEngine(config=mock_engine_config)
+        with pytest.raises(RuntimeError, match="AurafluxEngine is not initialized."):
+            await engine.execute_embedding(embedding_type="default", payload={"text": "test"}, config=MagicMock())
+
+    async def test_execute_embedding_invalid_type(self, mock_engine_config: EngineConfig):
+        """Edge Case: Calling execute_embedding with unknown type raises ValueError."""
+        engine = AurafluxEngine(config=mock_engine_config)
+        await engine.initialize()
+        with pytest.raises(ValueError, match="is not registered in EMBEDDING_REGISTRY"):
+            await engine.execute_embedding(embedding_type="unknown", payload={"text": "test"}, config=MagicMock())
+
+    async def test_execute_embedding_missing_payload_fields(self, mock_engine_config: EngineConfig):
+        """Edge Case: Calling execute_embedding with missing payload fields raises ValueError."""
+        engine = AurafluxEngine(config=mock_engine_config)
+        await engine.initialize()
+        with pytest.raises(ValueError, match="payload must contain either 'texts'"):
+            await engine.execute_embedding(embedding_type="default", payload={}, config=MagicMock())
+
+    async def test_execute_embedding_failure_handling(self, mock_engine_config: EngineConfig):
+        """Edge Case: execute_embedding catches exception and returns structured failure dictionary."""
+        engine = AurafluxEngine(config=mock_engine_config)
+        await engine.initialize()
+
+        mock_embedding_instance = MagicMock()
+        mock_embedding_instance.embed_query = AsyncMock(side_effect=RuntimeError("Embedding failure"))
+
+        mock_embedding = MagicMock()
+        mock_embedding.embedding_class = MagicMock(return_value=mock_embedding_instance)
+
+        with patch.dict("auraflux_core.engine.EMBEDDING_REGISTRY", {"default": mock_embedding}, clear=False):
+            res = await engine.execute_embedding(
+                embedding_type="default",
+                payload={"text": "fail test"},
+                config=MagicMock()
+            )
+
+            assert isinstance(res, dict)
+            assert res["status"] == "failed"
+            assert "Embedding failure" in res["error"]
+            assert res["metadata"] == {"embedding_type": "default"}
+
 
