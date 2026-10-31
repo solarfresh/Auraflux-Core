@@ -120,23 +120,23 @@ class AurafluxEngine:
     async def execute_orchestrator(
         self,
         orchestrator_type: str,
-        initial_state: dict,
+        payload: dict,
         config: Optional[OrchestratorConfig] = None,
     ) -> dict:
         """
         Execute an orchestrator by type with the given initial state.
 
         :param orchestrator_type: The orchestrator type string.
-        :param initial_state: The initial state dictionary.
+        :param payload: The initial state dictionary.
         :param config: Optional execution configuration.
         :return: A dictionary containing the final state and metadata.
         :raises RuntimeError: If the engine is not initialized.
-        :raises ValueError: If the orchestrator_type is not supported or initial_state is invalid.
+        :raises ValueError: If the orchestrator_type is not supported or payload is invalid.
         """
         self._ensure_initialized()
 
-        if not isinstance(initial_state, dict):
-            raise ValueError("initial_state must be a dictionary.")
+        if not isinstance(payload, dict):
+            raise ValueError("payload must be a dictionary.")
 
         if config is not None:
             if not isinstance(config, OrchestratorConfig):
@@ -149,7 +149,7 @@ class AurafluxEngine:
         try:
             orchestrator = impl.build_orchestrator(config=config)
 
-            final_state = await orchestrator.execute(input_data=initial_state)
+            final_state = await orchestrator.execute(payload=payload)
 
             return {
                 "status": "success" if final_state.status.value == "completed" else "failed",

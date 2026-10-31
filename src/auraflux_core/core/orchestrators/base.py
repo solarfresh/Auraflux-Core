@@ -46,7 +46,7 @@ class BaseOrchestrator:
             agent_names=list(self.agents.keys()),
         )
 
-    async def execute(self, input_data: Any) -> OrchestratorState:
+    async def execute(self, payload: Any) -> OrchestratorState:
         """
         Delegates the execution to the injected strategy.
         Automatically binds orchestrator context and logs execution state transitions.
@@ -74,7 +74,7 @@ class BaseOrchestrator:
             if self.agents is None:
                 raise ValueError("Agents are not defined in the configuration.")
             final_state = await self.strategy.execute(
-                input_data=input_data,
+                payload=payload,
                 tools=self.tools,
                 agents=self.agents,
                 state=self.state

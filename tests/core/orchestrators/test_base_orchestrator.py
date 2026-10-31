@@ -1,3 +1,4 @@
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -8,18 +9,19 @@ from auraflux_core.core.orchestrators.state import (OrchestratorState,
                                                     OrchestratorStatus)
 from auraflux_core.core.orchestrators.strategies.base import \
     OrchestrationStrategy
+from auraflux_core.core.protocols.agents import AgentProtocol
 from auraflux_core.core.schemas.orchestrators import OrchestratorConfig
 
 
 class MockStrategy(OrchestrationStrategy):
-    async def execute(self, input_data, tools, agents, state):
+    async def execute(self, payload, tools, agents, state):
         return state
 
 @pytest.fixture
 def mock_orchestrator_config():
     strategy = MockStrategy()
     tools = []
-    agents = {"agent1": MagicMock()}
+    agents = {"agent1": cast(AgentProtocol, MagicMock())}
     return OrchestratorConfig(strategy=strategy, tools=tools, agents=agents)
 
 
@@ -65,7 +67,7 @@ async def test_base_orchestrator_invalid_agents():
 @pytest.mark.asyncio
 async def test_base_orchestrator_run_success(mock_orchestrator_config):
     orchestrator = BaseOrchestrator(config=mock_orchestrator_config)
-    state = await orchestrator.execute(input_data={"task": "do something"})
+    state = await orchestrator.execute(payload={"task": "do something"})
 
     assert orchestrator.state.status == OrchestratorStatus.COMPLETED
 

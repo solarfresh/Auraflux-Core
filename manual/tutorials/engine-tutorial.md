@@ -69,7 +69,7 @@ async def main():
     )
     orchestrator_response = await engine.execute_orchestrator(
         orchestrator_type="dual_layer",
-        initial_state={"task": "Coordinate multi-agent workflow"},
+        payload={"task": "Coordinate multi-agent workflow"},
         config=orchestrator_config
     )
     print("Orchestrator Execution Result:", orchestrator_response)

@@ -41,11 +41,11 @@ async def test_dual_layer_strategy_full_execution(
     callback_adapter = CallbackTransportAdapter()
     strategy = DualLayerAgenticStrategy(router=router, callback_port=callback_adapter)
 
-    input_data = {"prompt": "Run isolated orchestration test"}
+    payload = {"prompt": "Run isolated orchestration test"}
     tools = {}
 
     result_state = await strategy.execute(
-        input_data=input_data,
+        payload=payload,
         tools=tools,
         agents=agents_registry,
         state=mock_orchestrator_state,
@@ -57,13 +57,13 @@ async def test_dual_layer_strategy_full_execution(
     step_1 = result_state.history[0]
     assert step_1.actor_name == "agent_a"
     assert step_1.input_params.get("extra") == "val_1"
-    assert step_1.input_params.get("payload") == input_data
+    assert step_1.input_params.get("payload") == payload
     assert step_1.output_data == {"result": "step_one_completed"}
     assert step_1.error is None
 
     step_2 = result_state.history[1]
     assert step_2.actor_name == "agent_a"
-    assert step_2.input_params.get("payload") == input_data
+    assert step_2.input_params.get("payload") == payload
     assert step_2.output_data == {"result": "step_two_completed"}
     assert step_2.error is None
 
@@ -101,7 +101,7 @@ async def test_dual_layer_strategy_missing_pipeline_error(
 
     with pytest.raises(AgentPipelineError) as exc_info:
         await strategy.execute(
-            input_data={"prompt": "test"},
+            payload={"prompt": "test"},
             tools={},
             agents=agents_registry,
             state=mock_orchestrator_state,
@@ -145,7 +145,7 @@ async def test_failed_resume_and_attempt_counting():
         checkpoint_port=mock_checkpoint_port,
         router=mock_router,
         agents=agents,
-        input_data={"data": "test"}
+        payload={"data": "test"}
     )
 
     assert final_state.attempt_count == 2
@@ -173,7 +173,7 @@ async def test_circuit_breaker_max_attempts():
             checkpoint_port=mock_checkpoint_port,
             router=mock_router,
             agents={"agent_a": MagicMock()},
-            input_data={}
+            payload={}
         )
 
 
@@ -204,7 +204,7 @@ async def test_corrupted_checkpoint_validation():
             checkpoint_port=mock_checkpoint_port,
             router=mock_router,
             agents={"agent_a": mock_agent},
-            input_data={}
+            payload={}
         )
 
 
@@ -231,7 +231,7 @@ async def test_unserializable_object_fallback():
         state.status = OrchestratorStatus.IDLE
 
         result_state = await strategy.execute(
-            input_data={},
+            payload={},
             tools={},
             agents={"agent_a": mock_agent},
             state=state
@@ -269,7 +269,7 @@ async def test_illegal_state_defense_completed():
             checkpoint_port=mock_checkpoint_port,
             router=mock_router,
             agents={"agent_a": MagicMock()},
-            input_data={}
+            payload={}
         )
 
     strategy.register_tools_to_agents.assert_not_called()
@@ -309,7 +309,7 @@ async def test_cursor_binding_and_state_tracking():
     state.cursor = ExecutionCursor(agent_name="", macro_iteration=0, completed_steps_count=0)
 
     result_state = await strategy.execute(
-        input_data={"test": "data"},
+        payload={"test": "data"},
         tools={},
         agents={"agent_x": agent_x},
         state=state
@@ -406,7 +406,7 @@ async def test_multi_agent_resume_cursor_isolation():
 
     # First execution: expected to fail at Agent B's step_b2, transitioning state to FAILED
     with pytest.raises(RuntimeError, match="Simulated failure at agent_b.step_b2"):
-        await strategy.execute(input_data={}, tools={}, agents=agents, state=state)
+        await strategy.execute(payload={}, tools={}, agents=agents, state=state)
 
     assert state.status == OrchestratorStatus.FAILED
     # Verify that Agent A executed fully (a1, a2) and Agent B executed up to b2 (failed)
@@ -427,7 +427,7 @@ async def test_multi_agent_resume_cursor_isolation():
         checkpoint_port=mock_checkpoint_port,
         router=mock_router,
         agents=agents,
-        input_data={}
+        payload={}
     )
 
     assert final_state.status == OrchestratorStatus.COMPLETED
@@ -464,7 +464,7 @@ async def test_boundary_failure_between_agents():
     state = OrchestratorState(session_id="sess_boundary")
 
     with pytest.raises(RuntimeError, match="Fail on Agent B start"):
-        await strategy.execute(input_data={}, tools={}, agents=agents, state=state)
+        await strategy.execute(payload={}, tools={}, agents=agents, state=state)
 
     assert state.status == OrchestratorStatus.FAILED
     assert state.cursor.agent_name == "agent_b"
@@ -502,7 +502,7 @@ async def test_attempt_count_persistence_on_resume():
             checkpoint_port=mock_checkpoint_port,
             router=mock_router,
             agents={"agent_a": agent_a},
-            input_data={}
+            payload={}
         )
 
     assert mock_checkpoint_port.save.called
@@ -564,8 +564,8 @@ async def test_concurrent_execution_race_condition() -> None:
 
     # Launch two executions concurrently via asyncio.gather
     results = await asyncio.gather(
-        strategy.execute(input_data={}, tools={}, agents=agents, state=state),
-        strategy.execute(input_data={}, tools={}, agents=agents, state=state),
+        strategy.execute(payload={}, tools={}, agents=agents, state=state),
+        strategy.execute(payload={}, tools={}, agents=agents, state=state),
         return_exceptions=True
     )
 

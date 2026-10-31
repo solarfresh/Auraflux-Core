@@ -125,7 +125,7 @@ class TestAurafluxEngine:
 
             result = await engine.execute_orchestrator(
                 orchestrator_type="default",
-                initial_state={"messages": []},
+                payload={"messages": []},
                 config=OrchestratorConfig(agents={"dummy": MagicMock()})
             )
 
@@ -139,21 +139,21 @@ class TestAurafluxEngine:
         """Edge Case: Calling execute_orchestrator before initialization raises RuntimeError."""
         engine = AurafluxEngine(config=mock_engine_config)
         with pytest.raises(RuntimeError, match="AurafluxEngine is not initialized."):
-            await engine.execute_orchestrator(orchestrator_type="default", initial_state={})
+            await engine.execute_orchestrator(orchestrator_type="default", payload={})
 
     async def test_execute_orchestrator_invalid_type(self, mock_engine_config: EngineConfig):
         """Edge Case: Calling execute_orchestrator with invalid type raises ValueError."""
         engine = AurafluxEngine(config=mock_engine_config)
         await engine.initialize()
         with pytest.raises(ValueError, match="is not supported"):
-            await engine.execute_orchestrator(orchestrator_type="invalid_type", initial_state={})
+            await engine.execute_orchestrator(orchestrator_type="invalid_type", payload={})
 
     async def test_execute_orchestrator_invalid_state(self, mock_engine_config: EngineConfig):
-        """Edge Case: Calling execute_orchestrator with invalid initial_state raises ValueError."""
+        """Edge Case: Calling execute_orchestrator with invalid payload raises ValueError."""
         engine = AurafluxEngine(config=mock_engine_config)
         await engine.initialize()
-        with pytest.raises(ValueError, match="initial_state must be a dictionary"):
-            await engine.execute_orchestrator(orchestrator_type="default", initial_state=cast(dict, "invalid_state"))
+        with pytest.raises(ValueError, match="payload must be a dictionary"):
+            await engine.execute_orchestrator(orchestrator_type="default", payload=cast(dict, "invalid_state"))
 
     async def test_execute_orchestrator_invalid_config_type(self, mock_engine_config: EngineConfig):
         """Edge Case: Calling execute_orchestrator with invalid config type raises ValueError."""
@@ -162,7 +162,7 @@ class TestAurafluxEngine:
         with pytest.raises(ValueError, match="config must be an instance of OrchestratorConfig"):
             await engine.execute_orchestrator(
                 orchestrator_type="default",
-                initial_state={},
+                payload={},
                 config="invalid_config" # type: ignore
             )
 

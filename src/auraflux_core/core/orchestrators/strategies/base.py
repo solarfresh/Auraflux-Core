@@ -20,7 +20,7 @@ class OrchestrationStrategy(ABC):
     @abstractmethod
     async def execute(
         self,
-        input_data: Any,
+        payload: Any,
         tools: Dict[str, Any],
         agents: Dict[str, Any],
         state: OrchestratorState
