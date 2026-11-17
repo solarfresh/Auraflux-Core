@@ -614,6 +614,14 @@ class OntologyValidatorTool(BaseTool):
                 if s_type in {"QUERY", "BOUNDARY", "NAVIGATION"}:
                     errors.append(f"Edge[{e_id}]: {s_type}[{src_id}] lacks empirical weight to VALIDATES. Use EVENT, RESOURCE, or INSIGHT.")
 
+                # Rule: Hypothesis-Outcome Direct Validation Prevention
+                if s_type == "QUERY" and t_type == "OUTCOME":
+                    errors.append(
+                        f"Edge[{e_id}]: Methodological Flaw - QUERY[{src_id}] (test question) "
+                        f"cannot directly VALIDATES OUTCOME[{tgt_id}] (hypothetical prediction). "
+                        f"A prediction cannot validate itself; it must be tested via an empirical EVENT or RESOURCE."
+                    )
+
                 # Rule: Target Restriction (Validations must lock onto an existing claim, concept, or query)
                 if t_type not in {"INSIGHT", "OUTCOME", "CONCEPT", "QUERY"}:
                     errors.append(f"Edge[{e_id}]: VALIDATES must target a claim, concept, or unresolved question. Invalid target: {t_type}.")
