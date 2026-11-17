@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
-from auraflux_core.canvases.constants import (SHARED_JSON_OUTPUT_FORMAT_EN,
-                                              SHARED_SAFETY_CONSTRAINTS_EN)
+from auraflux_core.canvases.constants import (SHARED_SAFETY_CONSTRAINTS_EN,
+                                              get_json_output_format_en)
 from auraflux_core.canvases.schemas import (ConceptualEdgeType,
                                             ConceptualNodeType)
 
@@ -56,7 +56,7 @@ DEFAULT_CRITIQUE_AGENT_PLAN_TEMPLATE = (
     "3. **Zero-Hallucination Policy**: Base critiques strictly on the reasoning present in the target node.\n\n"
     f"{SHARED_CRITIQUE_NODE_SPEC_EN}\n\n"
     f"{SHARED_CRITIQUE_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Detailed critique highlighting hidden assumptions or logical leaps', rationale_placeholder='Explanation of why this flaw or blindspot exists in the reasoning')}\n"
+    f"{get_json_output_format_en(content_placeholder='Detailed critique highlighting hidden assumptions or logical leaps', rationale_placeholder='Explanation of why this flaw or blindspot exists in the reasoning')}\n"
     f"{SHARED_SAFETY_CONSTRAINTS_EN}"
 )
 
@@ -106,7 +106,7 @@ DEFAULT_CRITIQUE_AGENT_SYNTHESIS_TEMPLATE = (
     "4. **SANITIZE**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
     f"{SHARED_CRITIQUE_NODE_SPEC_EN}\n\n"
     f"{SHARED_CRITIQUE_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Validated and polished description of the critical insight or blindspot', rationale_placeholder='Synthesized logical rationale supporting the critique structure')}\n"
+    f"{get_json_output_format_en(content_placeholder='Validated and polished description of the critical insight or blindspot', rationale_placeholder='Synthesized logical rationale supporting the critique structure')}\n"
     f"{SHARED_SAFETY_CONSTRAINTS_EN}"
 )
 
@@ -124,6 +124,6 @@ DEFAULT_CRITIQUE_AGENT_PLAN_REFINE_TEMPLATE = (
     "4. **Formatting Safety**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
     f"{SHARED_CRITIQUE_NODE_SPEC_EN}\n\n"
     f"{SHARED_CRITIQUE_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Corrected critique or blindspot description', rationale_placeholder='Explanation addressing the validation fix')}\n"
+    f"{get_json_output_format_en(content_placeholder='Corrected critique or blindspot description', rationale_placeholder='Explanation addressing the validation fix')}\n"
     f"{SHARED_SAFETY_CONSTRAINTS_EN}"
 )

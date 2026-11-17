@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
-from auraflux_core.canvases.constants import (SHARED_JSON_OUTPUT_FORMAT_EN,
-                                              SHARED_SAFETY_CONSTRAINTS_EN)
+from auraflux_core.canvases.constants import (SHARED_SAFETY_CONSTRAINTS_EN,
+                                              get_json_output_format_en)
 from auraflux_core.canvases.schemas import (ConceptualEdgeType,
                                             ConceptualNodeType)
 
@@ -68,7 +68,7 @@ DEFAULT_DECOMPOSITION_AGENT_PLAN_TEMPLATE = (
     "3. **Zero-Hallucination Policy**: Adhere strictly to logical progression based on the anchor node. Do not invent unevidenced steps.\n\n"
     f"{SHARED_NODE_SPEC_EN}\n\n"
     f"{SHARED_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Detailed description or summary of this immediate next step', rationale_placeholder='Logic explaining why this node connects directly to the anchor node')}\n"
+    f"{get_json_output_format_en(content_placeholder='Detailed description or summary of this immediate next step', rationale_placeholder='Logic explaining why this node connects directly to the anchor node')}\n"
     f"{SHARED_SAFETY_CONSTRAINTS_EN}"
 )
 
@@ -118,7 +118,7 @@ DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_TEMPLATE = (
     "4. **SANITIZE**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
     f"{SHARED_NODE_SPEC_EN}\n\n"
     f"{SHARED_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Validated and polished description of this immediate step', rationale_placeholder='Synthesized logic explaining the direct connection to the anchor node')}"
+    f"{get_json_output_format_en(content_placeholder='Validated and polished description of this immediate step', rationale_placeholder='Synthesized logic explaining the direct connection to the anchor node')}"
 )
 
 DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
@@ -168,5 +168,5 @@ DEFAULT_DECOMPOSITION_AGENT_PLAN_REFINE_TEMPLATE = (
     "4. **Formatting Safety**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
     f"{SHARED_NODE_SPEC_EN}\n\n"
     f"{SHARED_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Corrected description of this immediate step', rationale_placeholder='Explanation addressing the validation fix and direct anchor connection')}"
+    f"{get_json_output_format_en(content_placeholder='Corrected description of this immediate step', rationale_placeholder='Explanation addressing the validation fix and direct anchor connection')}"
 )

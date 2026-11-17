@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
-from auraflux_core.canvases.constants import (SHARED_JSON_OUTPUT_FORMAT_EN,
-                                              SHARED_SAFETY_CONSTRAINTS_EN)
+from auraflux_core.canvases.constants import (SHARED_SAFETY_CONSTRAINTS_EN,
+                                              get_json_output_format_en)
 from auraflux_core.canvases.schemas import (ConceptualEdgeType,
                                             ConceptualNodeType)
 
@@ -61,7 +61,7 @@ DEFAULT_HYPOTHESIS_AGENT_PLAN_TEMPLATE = (
     "3. **Zero-Hallucination Policy**: Adhere strictly to scientific logic based on the anchor node.\n\n"
     f"{SHARED_HYPOTHESIS_NODE_SPEC_EN}\n\n"
     f"{SHARED_HYPOTHESIS_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='A specific, falsifiable question or expected empirical outcome', rationale_placeholder='Logic explaining why this validation structure tests the anchor')}\n"
+    f"{get_json_output_format_en(content_placeholder='A specific, falsifiable question or expected empirical outcome', rationale_placeholder='Logic explaining why this validation structure tests the anchor')}\n"
     f"{SHARED_SAFETY_CONSTRAINTS_EN}"
 )
 
@@ -111,7 +111,7 @@ DEFAULT_HYPOTHESIS_AGENT_SYNTHESIS_TEMPLATE = (
     "4. **SANITIZE**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
     f"{SHARED_HYPOTHESIS_NODE_SPEC_EN}\n\n"
     f"{SHARED_HYPOTHESIS_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Validated and polished description of the test query or outcome', rationale_placeholder='Synthesized scientific rationale supporting the hypothesis structure')}"
+    f"{get_json_output_format_en(content_placeholder='Validated and polished description of the test query or outcome', rationale_placeholder='Synthesized scientific rationale supporting the hypothesis structure')}"
 )
 
 DEFAULT_HYPOTHESIS_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA = DEFAULT_HYPOTHESIS_AGENT_PLAN_STAGE_OUTPUT_SCHEMA
@@ -128,5 +128,5 @@ DEFAULT_HYPOTHESIS_AGENT_PLAN_REFINE_TEMPLATE = (
     "4. **Formatting Safety**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
     f"{SHARED_HYPOTHESIS_NODE_SPEC_EN}\n\n"
     f"{SHARED_HYPOTHESIS_EDGE_SPEC_EN}\n\n"
-    f"{SHARED_JSON_OUTPUT_FORMAT_EN.format(content_placeholder='Corrected hypothesis or validation description', rationale_placeholder='Explanation addressing the validation fix')}"
+    f"{get_json_output_format_en(content_placeholder='Corrected hypothesis or validation description', rationale_placeholder='Explanation addressing the validation fix')}"
 )
