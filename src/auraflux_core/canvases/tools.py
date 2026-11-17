@@ -549,12 +549,6 @@ class OntologyValidatorTool(BaseTool):
                 if not node.get('rationale') or len(str(node.get('rationale')).strip()) < 10:
                     errors.append(f"Node[{n_id}]: {n_type} is missing mandatory 'rationale' for synthesis.")
 
-        # Rule: Global North Star Unique Restraint (Canvas view integrity)
-        if focus_count > 1:
-            errors.append(f"Global Violation: Found {focus_count} FOCUS nodes. A canvas view must have exactly one FOCUS node.")
-        elif focus_count == 0:
-            errors.append("Global Violation: Graph is missing a FOCUS root node.")
-
         return errors
 
     def _validate_edges(self, edges: List[Dict[str, Any]], node_map: Dict[str, str]) -> List[str]:

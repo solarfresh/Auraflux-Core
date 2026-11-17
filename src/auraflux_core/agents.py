@@ -1,13 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Optional, Type, Union
+from typing import Callable, Dict, Type, Union
 
 from auraflux_core.alignment.mental_model.agents import MentalModelAgent
 from auraflux_core.alignment.objective_claim.agents import ObjectiveClaimAgent
 from auraflux_core.alignment.threshold_claim.agents import ThresholdClaimAgent
-from auraflux_core.canvases.agents import (GraphSynthesistAgent,
-                                           KnowledgeArchitect, OntologyAuditor)
-from auraflux_core.canvases.schemas import (GraphSynthesistAgentConfig,
-                                            SpatialLocateToolConfig)
+from auraflux_core.canvases.decomposition.agents import DecompositionAgent
+from auraflux_core.canvases.decomposition.schemas import DecompositionAgentConfig
+
 from auraflux_core.core.agents.base import BaseAgent
 from auraflux_core.core.protocols.agents import AgentProtocol
 from auraflux_core.core.protocols.clients import ClientManagerProtocol
@@ -20,11 +19,11 @@ Agent = Union[
     ObjectiveClaimAgent,
     ThresholdClaimAgent,
     ExtractKeywordsAgent,
+    DecompositionAgent,
     # TODO: interfaces of BaseAgent were changed, so these agents are
     # TODO: temporarily disabled until they are updated to match
     # TODO: the new interface.
     # GraphSynthesistAgent,
-    # KnowledgeArchitect,
     # OntologyAuditor
 ]
 
@@ -64,17 +63,10 @@ AGENT_REGISTRY: Dict[str, AgentImplementation] = {
         agent_class=ExtractKeywordsAgent,
         config_class=AgentConfig
     ),
-    # 'GraphSynthesistAgent': AgentImplementation(
-    #     agent_class=GraphSynthesistAgent,
-    #     config_class=GraphSynthesistAgentConfig,
-    #     tool_config_mapping={
-    #         'spatial_locate': SpatialLocateToolConfig
-    #     }
-    # ),
-    # 'KnowledgeArchitect': AgentImplementation(
-    #     agent_class=KnowledgeArchitect,
-    #     config_class=AgentConfig,
-    # ),
+    'DecompositionAgent': AgentImplementation(
+        agent_class=DecompositionAgent,
+        config_class=DecompositionAgentConfig
+    ),
     # 'OntologyAuditor': AgentImplementation(
     #     agent_class=OntologyAuditor,
     #     config_class=AgentConfig,
