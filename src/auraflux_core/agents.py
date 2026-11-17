@@ -5,8 +5,13 @@ from auraflux_core.alignment.mental_model.agents import MentalModelAgent
 from auraflux_core.alignment.objective_claim.agents import ObjectiveClaimAgent
 from auraflux_core.alignment.threshold_claim.agents import ThresholdClaimAgent
 from auraflux_core.canvases.agents import KnowledgeArchitect
+from auraflux_core.canvases.boundary.schemas import BoundaryAgentConfig
 from auraflux_core.canvases.decomposition.schemas import \
     DecompositionAgentConfig
+from auraflux_core.canvases.hypothesis_analysis.schemas import \
+    HypothesisAnalysisAgentConfig
+from auraflux_core.canvases.logic_critique.schemas import \
+    LogicCritiqueAgentConfig
 from auraflux_core.core.agents.base import BaseAgent
 from auraflux_core.core.protocols.agents import AgentProtocol
 from auraflux_core.core.protocols.clients import ClientManagerProtocol
@@ -63,9 +68,21 @@ AGENT_REGISTRY: Dict[str, AgentImplementation] = {
         agent_class=ExtractKeywordsAgent,
         config_class=AgentConfig
     ),
+    'BoundaryAgent': AgentImplementation(
+        agent_class=KnowledgeArchitect,
+        config_class=BoundaryAgentConfig
+    ),
     'DecompositionAgent': AgentImplementation(
         agent_class=KnowledgeArchitect,
         config_class=DecompositionAgentConfig
+    ),
+    'HypothesisAnalysisAgent': AgentImplementation(
+        agent_class=KnowledgeArchitect,
+        config_class=HypothesisAnalysisAgentConfig
+    ),
+    'LogicCritiqueAgent': AgentImplementation(
+        agent_class=KnowledgeArchitect,
+        config_class=LogicCritiqueAgentConfig
     ),
     # 'OntologyAuditor': AgentImplementation(
     #     agent_class=OntologyAuditor,
