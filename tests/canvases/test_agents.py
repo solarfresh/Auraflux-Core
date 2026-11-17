@@ -2,22 +2,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from auraflux_core.canvases.decomposition.agents import DecompositionAgent
-from auraflux_core.canvases.decomposition.schemas import (
-    DecompositionAgentConfig)
-from auraflux_core.canvases.schemas import ConceptualNode, ConceptualNodeType, ConceptualGraph
+from auraflux_core.canvases.agents import KnowledgeArchitect
+from auraflux_core.canvases.schemas import (ConceptualGraph, ConceptualNode,
+                                            ConceptualNodeType)
 from auraflux_core.core.schemas.pipelines import ValidationResult
 
 
-class DummyDecompositionAgent(DecompositionAgent):
-    async def execute_tool_workflow(self, payload, plan_output):
-        return []
-
-
 @pytest.fixture
-def agent(mock_client_manager):
-    config = DecompositionAgentConfig(provider="openai", model="gpt-4")
-    return DummyDecompositionAgent(config=config, client_manager=mock_client_manager)
+def agent(mock_agent_config, mock_client_manager):
+    return KnowledgeArchitect(config=mock_agent_config, client_manager=mock_client_manager)
 
 
 def test_get_plan_context_dict(agent):
