@@ -99,12 +99,14 @@ class CanvasPlanAndExecuteHandler(PlanAndExecuteHandler):
                 instruction = f"[Correction Required]: {err}. Action: OUTCOME nodes are terminal goals and cannot act as a causal source for TRIGGERS."
             elif "boundary" in lower_err and "use constrains instead of triggers" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: BOUNDARY nodes are static constraints; use CONSTRAINS instead of TRIGGERS."
-            elif "logical flaw" in lower_err and "query" in lower_err:
+            elif "logical flaw" in lower_err and "query" in lower_err and "methodological flaw" not in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: Unresolved QUERY nodes cannot activate or trigger other nodes until resolved."
             elif "fact categorization error" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: EVENT nodes are raw observations and cannot be validated; use REF instead."
             elif "lacks empirical weight to validates" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: Abstract nodes (QUERY, BOUNDARY, NAVIGATION) lack empirical weight to VALIDATE; use EVENT, RESOURCE, or INSIGHT."
+            elif "methodological flaw" in lower_err or ("query" in lower_err and "cannot directly validates" in lower_err):
+                instruction = f"[Correction Required]: {err}. Action: QUERY nodes cannot directly VALIDATES OUTCOME nodes. A prediction must be tested via an empirical EVENT or RESOURCE, or restructured."
             elif "validates must target" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: VALIDATES edges must target a claim, concept, or unresolved question (INSIGHT, OUTCOME, CONCEPT, QUERY)."
             elif "is not an allowed source for constrains" in lower_err:

@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Literal
 
-from pydantic import BaseModel, Field, NonNegativeInt
+from pydantic import Field, NonNegativeInt
 
 from auraflux_core.canvases.decomposition.constants import (
     DEFAULT_DECOMPOSITION_AGENT_PLAN_REFINE_TEMPLATE,
@@ -10,7 +10,6 @@ from auraflux_core.canvases.decomposition.constants import (
     DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_TEMPLATE,
     DEFAULT_DECOMPOSITION_AGENT_SYSTEM_PROMPT_EN,
     DEFAULT_DECOMPOSITION_AGENT_SYSTEM_PROMPT_ZH)
-from auraflux_core.canvases.schemas import ConceptualEdge, ConceptualNode
 from auraflux_core.core.schemas.agents import AgentConfig
 from auraflux_core.core.schemas.messages import (OutputFormat, PromptConfig,
                                                  StageSpec, SystemPromptSpec)
@@ -64,16 +63,3 @@ class DecompositionAgentConfig(AgentConfig):
     max_refine_retries: int = Field(default=3, ge=0)
     max_tokens: NonNegativeInt = 32768
     temperature: float = 0.0
-
-
-class DecompositionResponse(BaseModel):
-    """Response from DecompositionAgent."""
-    nodes: List[ConceptualNode]
-    edges: List[ConceptualEdge]
-
-
-class DecompositionErrorResponse(BaseModel):
-    """Standard error response structure."""
-    error_code: str
-    message: str
-    details: Optional[Dict[str, Any]] = None

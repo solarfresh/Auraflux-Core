@@ -73,7 +73,8 @@ class StageSpec(BaseModel):
         for _, field_name, _, _ in formatter.parse(template_str):
             if field_name is not None:
                 root_var = field_name.split(".")[0].split("[")[0]
-                placeholders.add(root_var)
+                if root_var.isidentifier():
+                    placeholders.add(root_var)
         return placeholders
 
 

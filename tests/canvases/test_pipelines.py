@@ -77,15 +77,16 @@ def test_format_validation_errors_to_instructions(handler):
         "Edge[8]: Logical Flaw - Unresolved QUERY[n1] cannot activate or TRIGGERS other nodes.",
         "Edge[9]: Fact Categorization Error - EVENT[n1] is a raw observation and cannot be validated.",
         "Edge[10]: QUERY[n1] lacks empirical weight to VALIDATES.",
-        "Edge[11]: VALIDATES must target a claim, concept, or unresolved question. Invalid target: ENTITY.",
-        "Edge[12]: ENTITY[n1] is not an allowed source for CONSTRAINS.",
-        "Edge[13]: Boundary Constraint cannot restrict static references or portals like RESOURCE[n1].",
-        "Edge[14]: GROUP[n1] is a spatial container; only REF or LINK is permitted."
+        "Edge[11]: Methodological Flaw - QUERY[n1] cannot directly VALIDATES OUTCOME[n2].",
+        "Edge[12]: VALIDATES must target a claim, concept, or unresolved question. Invalid target: ENTITY.",
+        "Edge[13]: ENTITY[n1] is not an allowed source for CONSTRAINS.",
+        "Edge[14]: Boundary Constraint cannot restrict static references or portals like RESOURCE[n1].",
+        "Edge[15]: GROUP[n1] is a spatial container; only REF or LINK is permitted."
     ]
 
     instructions = handler.format_validation_errors_to_instructions(errors)
 
-    assert len(instructions) == 16
+    assert len(instructions) == 17
     assert any("source_ref" in inst for inst in instructions)
     assert any("rationale" in inst for inst in instructions)
     assert any("reference existing nodes" in inst for inst in instructions)
@@ -98,6 +99,7 @@ def test_format_validation_errors_to_instructions(handler):
     assert any("Unresolved QUERY nodes" in inst for inst in instructions)
     assert any("EVENT nodes are raw observations" in inst for inst in instructions)
     assert any("lack empirical weight to VALIDATE" in inst for inst in instructions)
+    assert any("QUERY nodes cannot directly VALIDATES" in inst for inst in instructions)
     assert any("VALIDATES edges must target" in inst for inst in instructions)
     assert any("CONSTRAINS source must be" in inst for inst in instructions)
     assert any("Boundary constraints cannot restrict static references" in inst for inst in instructions)
