@@ -16,24 +16,24 @@ DEFAULT_DECOMPOSITION_AGENT_PLAN_TEMPLATE = (
     "1. Break down the given `source_node` into granular `sub_nodes`.\n"
     "2. Establish causal relationships (`causal_links`) between these sub-nodes.\n\n"
     "Required Output JSON Format:\n"
-    "{\n"
+    "{{\n"
     '  "sub_nodes": [\n'
-    '    {\n'
+    '    {{\n'
     '      "id": "unique_sub_id",\n'
     '      "label": "Sub-concept Label",\n'
     '      "type": "CONCEPT",\n'
     '      "source_ref": "Source reference",\n'
     '      "rationale": "Decomposition rationale"\n'
-    '    }\n'
+    '    }}\n'
     '  ],\n'
     '  "causal_links": [\n'
-    '    {\n'
+    '    {{\n'
     '      "source": "id1",\n'
     '      "target": "id2",\n'
     '      "relation": "TRIGGERS"\n'
-    '    }\n'
+    '    }}\n'
     '  ]\n'
-    "}"
+    "}}"
 )
 
 DEFAULT_DECOMPOSITION_AGENT_PLAN_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
