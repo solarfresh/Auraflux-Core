@@ -85,14 +85,34 @@ class CanvasPlanAndExecuteHandler(PlanAndExecuteHandler):
                 instruction = f"[Correction Required]: {err}. Action: Please provide a valid, non-empty 'source_ref' (at least 3 characters) for empirical grounding."
             elif "rationale" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: Please provide a clear 'rationale' (at least 10 characters) explaining the synthesis logic."
-            elif "self-referential" in lower_err or "self-loops" in lower_err:
-                instruction = f"[Correction Required]: {err}. Action: Remove self-loops where source and target are identical."
-            elif "orphaned" in lower_err:
+            elif "orphaned edge" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: Ensure all edge source and target IDs reference existing nodes in the node map."
+            elif "self-referential loop" in lower_err or "self-loops" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: Remove self-loops where source and target are identical."
+            elif "directional error" in lower_err and "focus" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: Central FOCUS nodes cannot be driven backwards by TRIGGERS, CONSTRAINS, or VALIDATES from other nodes. Reverse the edge direction or change relation type."
+            elif "static" in lower_err and "cannot triggers" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: Static entities or resources cannot directly trigger causality; introduce an intermediary EVENT node or change the relation."
             elif "temporal paradox" in lower_err:
-                instruction = f"[Correction Required]: {err}. Action: Correct causal direction to prevent future outcomes/insights from triggering past events."
-            elif "static" in lower_err or "boundary" in lower_err:
-                instruction = f"[Correction Required]: {err}. Action: Adjust edge types (e.g. use CONSTRAINS or LINK instead of TRIGGERS for static boundaries/entities)."
+                instruction = f"[Correction Required]: {err}. Action: Correct the causal direction; downstream synthesis nodes (OUTCOME/INSIGHT) cannot trigger past observation events."
+            elif "terminal violation" in lower_err or ("outcome" in lower_err and "cannot act as a causal source" in lower_err):
+                instruction = f"[Correction Required]: {err}. Action: OUTCOME nodes are terminal goals and cannot act as a causal source for TRIGGERS."
+            elif "boundary" in lower_err and "use constrains instead of triggers" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: BOUNDARY nodes are static constraints; use CONSTRAINS instead of TRIGGERS."
+            elif "logical flaw" in lower_err and "query" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: Unresolved QUERY nodes cannot activate or trigger other nodes until resolved."
+            elif "fact categorization error" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: EVENT nodes are raw observations and cannot be validated; use REF instead."
+            elif "lacks empirical weight to validates" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: Abstract nodes (QUERY, BOUNDARY, NAVIGATION) lack empirical weight to VALIDATE; use EVENT, RESOURCE, or INSIGHT."
+            elif "validates must target" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: VALIDATES edges must target a claim, concept, or unresolved question (INSIGHT, OUTCOME, CONCEPT, QUERY)."
+            elif "is not an allowed source for constrains" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: CONSTRAINS source must be a scope-defining component (BOUNDARY, CONCEPT, GROUP, FOCUS)."
+            elif "boundary constraint cannot restrict static references" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: Boundary constraints cannot restrict static references or portals like RESOURCE or NAVIGATION."
+            elif "spatial container" in lower_err or "group" in lower_err:
+                instruction = f"[Correction Required]: {err}. Action: GROUP nodes are spatial containers; only REF or LINK relationships are permitted."
             else:
                 instruction = f"[Correction Required]: {err}. Action: Please fix this ontology violation to comply with empirical science standards."
             instructions.append(instruction)

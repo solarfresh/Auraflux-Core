@@ -61,6 +61,7 @@ class DecompositionAgentConfig(AgentConfig):
             },
         )
     )
+    max_refine_retries: int = Field(default=3, ge=0)
     max_tokens: NonNegativeInt = 32768
     temperature: float = 0.0
 

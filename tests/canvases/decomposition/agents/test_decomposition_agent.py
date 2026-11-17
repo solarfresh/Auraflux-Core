@@ -4,8 +4,8 @@ import pytest
 
 from auraflux_core.canvases.decomposition.agents import DecompositionAgent
 from auraflux_core.canvases.decomposition.schemas import (
-    DecompositionAgentConfig, DecompositionResponse)
-from auraflux_core.canvases.schemas import ConceptualNode, ConceptualNodeType
+    DecompositionAgentConfig)
+from auraflux_core.canvases.schemas import ConceptualNode, ConceptualNodeType, ConceptualGraph
 from auraflux_core.core.schemas.pipelines import ValidationResult
 
 
@@ -75,9 +75,9 @@ def test_parse_final_output_success(agent):
     }
 
     result = agent.parse_final_output(payload, plan_output, raw_llm_output)
-    assert isinstance(result, DecompositionResponse)
+    assert isinstance(result, ConceptualGraph)
     assert len(result.nodes) == 1
-    assert result.nodes[0].id == "sub1"
+    assert "sub1" in result.nodes
 
 
 def test_parse_final_output_fallback(agent):
@@ -92,6 +92,6 @@ def test_parse_final_output_fallback(agent):
     agent.output_parser.parse_json.side_effect = Exception("Parsing error")
 
     result = agent.parse_final_output(payload, plan_output, raw_llm_output)
-    assert isinstance(result, DecompositionResponse)
+    assert isinstance(result, ConceptualGraph)
     assert len(result.nodes) == 1
-    assert result.nodes[0].id == "sub_fallback"
+    assert "sub_fallback" in result.nodes

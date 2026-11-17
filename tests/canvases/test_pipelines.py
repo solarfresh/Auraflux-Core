@@ -65,23 +65,40 @@ async def test_inspect_plan_output_invalid(handler):
 
 def test_format_validation_errors_to_instructions(handler):
     errors = [
-        "Missing source_ref",
-        "Missing rationale",
-        "Missing focus node",
-        "Self-referential loop detected",
-        "Orphaned edge found",
-        "Temporal paradox in edges",
-        "Static boundary violation",
-        "Unknown custom error"
+        "Node[1]: EVENT is missing mandatory 'source_ref' for grounding.",
+        "Node[2]: INSIGHT is missing mandatory 'rationale' for synthesis.",
+        "Edge[1]: Orphaned edge (n1->n2) - one or both nodes are undefined in node_map.",
+        "Edge[2]: Self-referential loop detected on Node[n1].",
+        "Edge[3]: Directional Error - Central FOCUS cannot be driven by TRIGGERS from Node[n1].",
+        "Edge[4]: Static ENTITY[n1] cannot TRIGGERS causality.",
+        "Edge[5]: Temporal Paradox - Synthesis INSIGHT[n1] cannot TRIGGERS a past observation EVENT[n2].",
+        "Edge[6]: Terminal Violation - OUTCOME[n1] is a research goal and cannot act as a causal source.",
+        "Edge[7]: BOUNDARY[n1] is a static constraint. Use CONSTRAINS instead of TRIGGERS.",
+        "Edge[8]: Logical Flaw - Unresolved QUERY[n1] cannot activate or TRIGGERS other nodes.",
+        "Edge[9]: Fact Categorization Error - EVENT[n1] is a raw observation and cannot be validated.",
+        "Edge[10]: QUERY[n1] lacks empirical weight to VALIDATES.",
+        "Edge[11]: VALIDATES must target a claim, concept, or unresolved question. Invalid target: ENTITY.",
+        "Edge[12]: ENTITY[n1] is not an allowed source for CONSTRAINS.",
+        "Edge[13]: Boundary Constraint cannot restrict static references or portals like RESOURCE[n1].",
+        "Edge[14]: GROUP[n1] is a spatial container; only REF or LINK is permitted."
     ]
 
     instructions = handler.format_validation_errors_to_instructions(errors)
 
-    assert len(instructions) == 8
+    assert len(instructions) == 16
     assert any("source_ref" in inst for inst in instructions)
     assert any("rationale" in inst for inst in instructions)
-    assert any("self-loops" in inst for inst in instructions)
     assert any("reference existing nodes" in inst for inst in instructions)
-    assert any("causal direction" in inst for inst in instructions)
-    assert any("edge types" in inst for inst in instructions)
-    assert any("empirical science standards" in inst for inst in instructions)
+    assert any("self-loops" in inst for inst in instructions)
+    assert any("Central FOCUS nodes cannot be driven backwards" in inst for inst in instructions)
+    assert any("Static entities or resources" in inst for inst in instructions)
+    assert any("downstream synthesis nodes" in inst for inst in instructions)
+    assert any("OUTCOME nodes are terminal goals" in inst for inst in instructions)
+    assert any("BOUNDARY nodes are static constraints" in inst for inst in instructions)
+    assert any("Unresolved QUERY nodes" in inst for inst in instructions)
+    assert any("EVENT nodes are raw observations" in inst for inst in instructions)
+    assert any("lack empirical weight to VALIDATE" in inst for inst in instructions)
+    assert any("VALIDATES edges must target" in inst for inst in instructions)
+    assert any("CONSTRAINS source must be" in inst for inst in instructions)
+    assert any("Boundary constraints cannot restrict static references" in inst for inst in instructions)
+    assert any("GROUP nodes are spatial containers" in inst for inst in instructions)

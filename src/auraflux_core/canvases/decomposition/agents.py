@@ -1,10 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from auraflux_core.canvases.decomposition.schemas import (
-    DecompositionResponse,
-)
-from auraflux_core.canvases.schemas import ConceptualEdge, ConceptualNode
+from auraflux_core.canvases.schemas import ConceptualEdge, ConceptualNode, ConceptualGraph
 from auraflux_core.canvases.pipelines import CanvasPlanAndExecuteHandler
 from auraflux_core.core.agents.base import BaseAgent
 from auraflux_core.core.configs.logging_config import get_logger
@@ -76,8 +73,8 @@ class DecompositionAgent(BaseAgent, CanvasPlanAndExecuteHandler):
 
     def parse_final_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
-    ) -> DecompositionResponse:
-        """Domain Transformation Hook: Maps plan and synthesis/raw outputs into DecompositionResponse."""
+    ) -> ConceptualGraph:
+        """Domain Transformation Hook: Maps plan and synthesis/raw outputs into ConceptualGraph."""
         try:
             parsed_data = self.output_parser.parse_json(raw_llm_output)
         except Exception:
@@ -87,8 +84,8 @@ class DecompositionAgent(BaseAgent, CanvasPlanAndExecuteHandler):
         sub_nodes = [ConceptualNode(**item) for item in parsed_data.get("nodes", [])]
         causal_links = [ConceptualEdge(**item) for item in parsed_data.get("edges", [])]
 
-        result = DecompositionResponse(
-            nodes=sub_nodes,
+        result = ConceptualGraph(
+            nodes={node.id: node for node in sub_nodes},
             edges=causal_links,
         )
 
