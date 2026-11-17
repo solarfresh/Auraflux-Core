@@ -6,8 +6,6 @@ from auraflux_core.canvases.decomposition.constants import (
     DEFAULT_DECOMPOSITION_AGENT_PLAN_REFINE_TEMPLATE,
     DEFAULT_DECOMPOSITION_AGENT_PLAN_STAGE_OUTPUT_SCHEMA,
     DEFAULT_DECOMPOSITION_AGENT_PLAN_TEMPLATE,
-    DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA,
-    DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_TEMPLATE,
     DEFAULT_DECOMPOSITION_AGENT_SYSTEM_PROMPT_EN,
     DEFAULT_DECOMPOSITION_AGENT_SYSTEM_PROMPT_ZH)
 from auraflux_core.core.schemas.agents import AgentConfig
@@ -47,15 +45,6 @@ class DecompositionAgentConfig(AgentConfig):
                     },
                     output_format=OutputFormat.JSON,
                     output_schema=DEFAULT_DECOMPOSITION_AGENT_PLAN_STAGE_OUTPUT_SCHEMA,
-                ),
-                'synthesis': StageSpec(
-                    templates={'default': DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_TEMPLATE},
-                    template_variables={
-                        "source_node": "The source conceptual node to be decomposed.",
-                        "plan_output": "The output generated from the planning stage.",
-                    },
-                    output_format=OutputFormat.JSON,
-                    output_schema=DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA,
                 ),
             },
         )

@@ -130,7 +130,19 @@ class CanvasPlanAndExecuteHandler(PlanAndExecuteHandler):
         # integration points for graph growth tools can be added here if needed.
         return []
 
+    def should_bypass_synthesis(
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message]
+    ) -> bool:
+        """
+        Hook for determining if the synthesis stage should be bypassed.
+        Default: False (synthesis is executed).
+        """
+        return True
+
     def parse_final_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
     ) -> Any:
-        return raw_llm_output
+        return plan_output

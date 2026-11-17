@@ -95,23 +95,6 @@ DEFAULT_CRITIQUE_AGENT_PLAN_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
     },
 }
 
-DEFAULT_CRITIQUE_AGENT_SYNTHESIS_TEMPLATE = (
-    "You are the Graph Synthesist, a specialized architect of knowledge structures.\n"
-    "Current Target Node (Anchor): {source_node}\n"
-    "Raw Plan Output: {plan_output}\n\n"
-    "### CORE RESPONSIBILITIES:\n"
-    "1. **ANALYZE**: Evaluate the proposed critique nodes and edges to ensure sharp logical auditing without ad hominem or ungrounded claims.\n"
-    "2. **VALIDATE TOPOLOGY**: Verify that the critique node correctly references the target node via [REF]. Prune any disconnected or chaotic structures.\n"
-    "3. **OPTIMIZE**: Refine each node's `label`, `content`, and `rationale` for maximum analytical rigor and professional terminology.\n"
-    "4. **SANITIZE**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
-    f"{SHARED_CRITIQUE_NODE_SPEC_EN}\n\n"
-    f"{SHARED_CRITIQUE_EDGE_SPEC_EN}\n\n"
-    f"{get_json_output_format_en(content_placeholder='Validated and polished description of the critical insight or blindspot', rationale_placeholder='Synthesized logical rationale supporting the critique structure')}\n"
-    f"{SHARED_SAFETY_CONSTRAINTS_EN}"
-)
-
-DEFAULT_CRITIQUE_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA = DEFAULT_CRITIQUE_AGENT_PLAN_STAGE_OUTPUT_SCHEMA
-
 DEFAULT_CRITIQUE_AGENT_PLAN_REFINE_TEMPLATE = (
     "You are a senior 「Logic Auditor」 specializing in critical thinking and fallacy analysis.\n"
     "Current Target Node (Anchor): {source_node}\n"

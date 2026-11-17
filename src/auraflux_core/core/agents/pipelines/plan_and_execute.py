@@ -134,6 +134,18 @@ class PlanAndExecuteHandler(ABC):
         """
         pass
 
+    def should_bypass_synthesis(
+        self,
+        payload: Dict[str, Any],
+        plan_output: Dict[str, Any],
+        tool_results: List[Message]
+    ) -> bool:
+        """
+        Hook for determining if the synthesis stage should be bypassed.
+        Default: False (synthesis is executed).
+        """
+        return False
+
     def get_synthesis_context(
         self,
         payload: Dict[str, Any],
@@ -369,10 +381,14 @@ class PlanAndExecutePipeline(BaseAgentPipeline):
         """
         Synthesizes tool execution results and plan output into a raw LLM response.
         """
+        handler = cast(PlanAndExecuteHandler, agent)
+        if handler.should_bypass_synthesis(payload, plan_output, tool_results):
+            logger.info("synthesis_stage_bypassed")
+            return ""
+
         start_time = time.perf_counter()
         logger.info("stage_started")
 
-        handler = cast(PlanAndExecuteHandler, agent)
         synth_messages = handler.build_synthesis_messages(payload, plan_output, tool_results, agent)
         synth_response = await agent.generate(synth_messages)
 

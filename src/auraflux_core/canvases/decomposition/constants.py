@@ -107,55 +107,6 @@ DEFAULT_DECOMPOSITION_AGENT_PLAN_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
     },
 }
 
-DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_TEMPLATE = (
-    "You are the Graph Synthesist, a specialized architect of knowledge structures.\n"
-    "Current Source Node (Anchor): {source_node}\n"
-    "Raw Plan Output: {plan_output}\n\n"
-    "### CORE RESPONSIBILITIES:\n"
-    "1. **ANALYZE**: Evaluate the proposed nodes and edges from the raw plan output to ensure strict logical adherence to the anchor node.\n"
-    "2. **VALIDATE TOPOLOGY (1-Hop Rule)**: Verify that EVERY generated node connects directly to the Current Source Node (Anchor). Prune any multi-hop chains (`new_node -> new_node`) or disconnected nodes that do not link directly to the anchor ID.\n"
-    "3. **OPTIMIZE**: Refine each node's `label`, `content`, and `rationale` for maximum clarity, professional terminology, and precise empirical grounding.\n"
-    "4. **SANITIZE**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
-    f"{SHARED_NODE_SPEC_EN}\n\n"
-    f"{SHARED_EDGE_SPEC_EN}\n\n"
-    f"{get_json_output_format_en(content_placeholder='Validated and polished description of this immediate step', rationale_placeholder='Synthesized logic explaining the direct connection to the anchor node')}"
-)
-
-DEFAULT_DECOMPOSITION_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "required": ["nodes", "edges"],
-    "properties": {
-        "nodes": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["id", "label", "type", "content", "rationale"],
-                "properties": {
-                    "id": {"type": "string"},
-                    "label": {"type": "string"},
-                    "type": {"type": "string", "enum": [node_type.value for node_type in ConceptualNodeType]},
-                    "content": {"type": "string"},
-                    "rationale": {"type": "string"},
-                },
-            },
-        },
-        "edges": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["source", "target", "type", "rationale"],
-                "properties": {
-                    "source": {"type": "string"},
-                    "target": {"type": "string"},
-                    "type": {"type": "string", "enum": [edge_type.value for edge_type in ConceptualEdgeType]},
-                    "rationale": {"type": "string"},
-                },
-            },
-        },
-    },
-}
-
 DEFAULT_DECOMPOSITION_AGENT_PLAN_REFINE_TEMPLATE = (
     "You are a senior 「Knowledge Architect」 specializing in empirical science graph modeling.\n"
     "Current Source Node (Anchor): {source_node}\n"
