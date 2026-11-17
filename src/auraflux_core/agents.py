@@ -24,7 +24,6 @@ Agent = Union[
     # TODO: temporarily disabled until they are updated to match
     # TODO: the new interface.
     # GraphSynthesistAgent,
-    # KnowledgeArchitect,
     # OntologyAuditor
 ]
 
@@ -68,17 +67,6 @@ AGENT_REGISTRY: Dict[str, AgentImplementation] = {
         agent_class=DecompositionAgent,
         config_class=DecompositionAgentConfig
     ),
-    # 'GraphSynthesistAgent': AgentImplementation(
-    #     agent_class=GraphSynthesistAgent,
-    #     config_class=GraphSynthesistAgentConfig,
-    #     tool_config_mapping={
-    #         'spatial_locate': SpatialLocateToolConfig
-    #     }
-    # ),
-    # 'KnowledgeArchitect': AgentImplementation(
-    #     agent_class=KnowledgeArchitect,
-    #     config_class=AgentConfig,
-    # ),
     # 'OntologyAuditor': AgentImplementation(
     #     agent_class=OntologyAuditor,
     #     config_class=AgentConfig,

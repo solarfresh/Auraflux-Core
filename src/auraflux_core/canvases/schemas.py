@@ -245,11 +245,3 @@ class SpatialLocateToolConfig(ToolConfig):
         description="Mass constants for different node types"
     )
     aspect_ratio: float = Field(default=1.7, description="aspect ratio for a conceptual node, used to calculate the position of the handle")
-
-
-class GraphSynthesistAgentConfig(AgentConfig):
-    tool_call_protocol: Literal['NATIVE', 'PROMPT', 'FORCE'] = 'PROMPT'
-    tool_execution_strategy: Literal['NONE', 'DIRECT', 'REFLECTIVE'] = 'DIRECT'
-    tool_configs: Dict[str, Any] = {
-        'spatial_locate': SpatialLocateToolConfig()
-    }

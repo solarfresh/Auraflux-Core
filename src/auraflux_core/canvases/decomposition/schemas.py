@@ -67,8 +67,8 @@ class DecompositionAgentConfig(AgentConfig):
 
 class DecompositionResponse(BaseModel):
     """Response from DecompositionAgent."""
-    sub_nodes: List[ConceptualNode]
-    causal_links: List[ConceptualEdge]
+    nodes: List[ConceptualNode]
+    edges: List[ConceptualEdge]
 
 
 class DecompositionErrorResponse(BaseModel):

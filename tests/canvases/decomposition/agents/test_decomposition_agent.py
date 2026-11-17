@@ -45,7 +45,7 @@ def test_get_plan_context_model(agent):
 
 def test_get_plan_refinement_context_valid(agent):
     payload = {"source_node": {"id": "n1", "label": "Test Node"}}
-    plan_output = {"sub_nodes": [], "causal_links": []}
+    plan_output = {"nodes": [], "edges": []}
     validation_result = ValidationResult(is_valid=False, reasons=["Missing source_ref"])
 
     context = agent.get_plan_refinement_context(payload, plan_output, validation_result)
@@ -56,7 +56,7 @@ def test_get_plan_refinement_context_valid(agent):
 
 def test_get_plan_refinement_context_empty(agent):
     payload = {"source_node": {"id": "n1", "label": "Test Node"}}
-    plan_output = {"sub_nodes": [], "causal_links": []}
+    plan_output = {"nodes": [], "edges": []}
     validation_result = ValidationResult(is_valid=True, reasons=[])
 
     context = agent.get_plan_refinement_context(payload, plan_output, validation_result)
@@ -66,25 +66,25 @@ def test_get_plan_refinement_context_empty(agent):
 def test_parse_final_output_success(agent):
     payload = {"source_node": {"id": "root"}}
     plan_output = {}
-    raw_llm_output = '{"sub_nodes": [{"id": "sub1", "type": "CONCEPT", "content": "Sub 1", "anchor_id": "a1", "label": "Sub 1", "source_ref": "ref", "rationale": "rat"}], "causal_links": []}'
+    raw_llm_output = '{"nodes": [{"id": "sub1", "type": "CONCEPT", "content": "Sub 1", "anchor_id": "a1", "label": "Sub 1", "source_ref": "ref", "rationale": "rat"}], "edges": []}'
 
     agent.output_parser = MagicMock()
     agent.output_parser.parse_json.return_value = {
-        "sub_nodes": [{"id": "sub1", "type": "CONCEPT", "content": "Sub 1", "anchor_id": "a1", "label": "Sub 1", "source_ref": "ref", "rationale": "rat"}],
-        "causal_links": []
+        "nodes": [{"id": "sub1", "type": "CONCEPT", "content": "Sub 1", "anchor_id": "a1", "label": "Sub 1", "source_ref": "ref", "rationale": "rat"}],
+        "edges": []
     }
 
     result = agent.parse_final_output(payload, plan_output, raw_llm_output)
     assert isinstance(result, DecompositionResponse)
-    assert len(result.sub_nodes) == 1
-    assert result.sub_nodes[0].id == "sub1"
+    assert len(result.nodes) == 1
+    assert result.nodes[0].id == "sub1"
 
 
 def test_parse_final_output_fallback(agent):
     payload = {"source_node": {"id": "root"}}
     plan_output = {
-        "sub_nodes": [{"id": "sub_fallback", "type": "CONCEPT", "content": "Fallback", "anchor_id": "a1", "label": "Fallback", "source_ref": "ref", "rationale": "rat"}],
-        "causal_links": []
+        "nodes": [{"id": "sub_fallback", "type": "CONCEPT", "content": "Fallback", "anchor_id": "a1", "label": "Fallback", "source_ref": "ref", "rationale": "rat"}],
+        "edges": []
     }
     raw_llm_output = 'invalid json'
 
@@ -93,5 +93,5 @@ def test_parse_final_output_fallback(agent):
 
     result = agent.parse_final_output(payload, plan_output, raw_llm_output)
     assert isinstance(result, DecompositionResponse)
-    assert len(result.sub_nodes) == 1
-    assert result.sub_nodes[0].id == "sub_fallback"
+    assert len(result.nodes) == 1
+    assert result.nodes[0].id == "sub_fallback"

@@ -80,7 +80,6 @@ def test_format_validation_errors_to_instructions(handler):
     assert len(instructions) == 8
     assert any("source_ref" in inst for inst in instructions)
     assert any("rationale" in inst for inst in instructions)
-    assert any("FOCUS node" in inst for inst in instructions)
     assert any("self-loops" in inst for inst in instructions)
     assert any("reference existing nodes" in inst for inst in instructions)
     assert any("causal direction" in inst for inst in instructions)

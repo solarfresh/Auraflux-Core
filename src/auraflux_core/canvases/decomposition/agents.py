@@ -84,12 +84,12 @@ class DecompositionAgent(BaseAgent, CanvasPlanAndExecuteHandler):
             # Fallback to plan_output if raw_llm_output parsing fails
             parsed_data = plan_output
 
-        sub_nodes = [ConceptualNode(**item) for item in parsed_data.get("sub_nodes", [])]
-        causal_links = [ConceptualEdge(**item) for item in parsed_data.get("causal_links", [])]
+        sub_nodes = [ConceptualNode(**item) for item in parsed_data.get("nodes", [])]
+        causal_links = [ConceptualEdge(**item) for item in parsed_data.get("edges", [])]
 
         result = DecompositionResponse(
-            sub_nodes=sub_nodes,
-            causal_links=causal_links,
+            nodes=sub_nodes,
+            edges=causal_links,
         )
 
         source_node = payload.get("source_node", {})

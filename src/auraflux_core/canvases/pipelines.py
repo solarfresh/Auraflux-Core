@@ -26,8 +26,8 @@ class CanvasPlanAndExecuteHandler(PlanAndExecuteHandler):
         Returns ValidationResult containing is_valid, reasons (formatted as English LLM instructions), and metadata.
         """
         try:
-            nodes = plan_output.get("nodes", []) or plan_output.get("sub_nodes", [])
-            edges = plan_output.get("edges", []) or plan_output.get("causal_links", [])
+            nodes = plan_output.get("nodes", [])
+            edges = plan_output.get("edges", [])
 
             validator = OntologyValidatorTool()
             validation_data = await validator.run(nodes=nodes, edges=edges)
@@ -85,8 +85,6 @@ class CanvasPlanAndExecuteHandler(PlanAndExecuteHandler):
                 instruction = f"[Correction Required]: {err}. Action: Please provide a valid, non-empty 'source_ref' (at least 3 characters) for empirical grounding."
             elif "rationale" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: Please provide a clear 'rationale' (at least 10 characters) explaining the synthesis logic."
-            elif "focus" in lower_err:
-                instruction = f"[Correction Required]: {err}. Action: Ensure the graph contains exactly one FOCUS node acting as the unique root/core."
             elif "self-referential" in lower_err or "self-loops" in lower_err:
                 instruction = f"[Correction Required]: {err}. Action: Remove self-loops where source and target are identical."
             elif "orphaned" in lower_err:
@@ -99,3 +97,18 @@ class CanvasPlanAndExecuteHandler(PlanAndExecuteHandler):
                 instruction = f"[Correction Required]: {err}. Action: Please fix this ontology violation to comply with empirical science standards."
             instructions.append(instruction)
         return instructions
+
+    async def execute_tool_workflow(
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any]
+    ) -> List[Message]:
+        """
+        Stage 2 Implementation: Executes deterministic tool workflows for canvas decomposition.
+        """
+        # For decomposition, Stage 2 currently relies on structural validation or no-op workflow,
+        # integration points for graph growth tools can be added here if needed.
+        return []
+
+    def parse_final_output(
+        self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
+    ) -> Any:
+        return raw_llm_output
