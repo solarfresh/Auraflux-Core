@@ -100,22 +100,6 @@ DEFAULT_HYPOTHESIS_AGENT_PLAN_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
     },
 }
 
-DEFAULT_HYPOTHESIS_AGENT_SYNTHESIS_TEMPLATE = (
-    "You are the Graph Synthesist, a specialized architect of knowledge structures.\n"
-    "Current Source Node (Anchor): {source_node}\n"
-    "Raw Plan Output: {plan_output}\n\n"
-    "### CORE RESPONSIBILITIES:\n"
-    "1. **ANALYZE**: Evaluate the proposed hypothesis nodes and edges to ensure strict falsifiability and logical adherence to the anchor node.\n"
-    "2. **VALIDATE TOPOLOGY**: Verify that the [QUERY] links directly from the anchor via [LINK], and the [OUTCOME] connects from the [QUERY] via [VALIDATES]. Prune any disconnected or chaotic chains.\n"
-    "3. **OPTIMIZE**: Refine each node's `label`, `content`, and `rationale` for maximum scientific rigor and professional terminology.\n"
-    "4. **SANITIZE**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
-    f"{SHARED_HYPOTHESIS_NODE_SPEC_EN}\n\n"
-    f"{SHARED_HYPOTHESIS_EDGE_SPEC_EN}\n\n"
-    f"{get_json_output_format_en(content_placeholder='Validated and polished description of the test query or outcome', rationale_placeholder='Synthesized scientific rationale supporting the hypothesis structure')}"
-)
-
-DEFAULT_HYPOTHESIS_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA = DEFAULT_HYPOTHESIS_AGENT_PLAN_STAGE_OUTPUT_SCHEMA
-
 DEFAULT_HYPOTHESIS_AGENT_PLAN_REFINE_TEMPLATE = (
     "You are a senior 「Scientific Methodology Expert」 specializing in experimental design and causal inference.\n"
     "Current Source Node (Anchor): {source_node}\n"

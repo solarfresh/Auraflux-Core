@@ -96,23 +96,6 @@ DEFAULT_BOUNDARY_AGENT_PLAN_STAGE_OUTPUT_SCHEMA: Dict[str, Any] = {
     },
 }
 
-DEFAULT_BOUNDARY_AGENT_SYNTHESIS_TEMPLATE = (
-    "You are the Graph Synthesist, a specialized architect of knowledge structures.\n"
-    "Current Target Node (Anchor): {source_node}\n"
-    "Raw Plan Output: {plan_output}\n\n"
-    "### CORE RESPONSIBILITIES:\n"
-    "1. **ANALYZE**: Evaluate the proposed boundary nodes and stress edges to ensure realistic limit-testing and logical adherence to the target node.\n"
-    "2. **VALIDATE TOPOLOGY**: Verify that [BOUNDARY] correctly constrains the target via [CONSTRAINS] (`BOUNDARY -> CONSTRAINS -> Target`). Prune any invalid or unlinked structures.\n"
-    "3. **OPTIMIZE**: Refine each node's `label`, `content`, and `rationale` for maximum stress-testing rigor and professional terminology.\n"
-    "4. **SANITIZE**: Strictly prohibit LaTeX, backslashes, or mathematical escape sequences. Use plain text only.\n\n"
-    f"{SHARED_BOUNDARY_NODE_SPEC_EN}\n\n"
-    f"{SHARED_BOUNDARY_EDGE_SPEC_EN}\n\n"
-    f"{get_json_output_format_en(content_placeholder='Validated and polished description of the boundary constraint or breaking point', rationale_placeholder='Synthesized logical rationale supporting the boundary stress structure')}\n"
-    f"{SHARED_SAFETY_CONSTRAINTS_EN}"
-)
-
-DEFAULT_BOUNDARY_AGENT_SYNTHESIS_STAGE_OUTPUT_SCHEMA = DEFAULT_BOUNDARY_AGENT_PLAN_STAGE_OUTPUT_SCHEMA
-
 DEFAULT_BOUNDARY_AGENT_PLAN_REFINE_TEMPLATE = (
     "You are a senior 「Boundary Architect」 specializing in extreme scenario and system limit analysis.\n"
     "Current Target Node (Anchor): {source_node}\n"
