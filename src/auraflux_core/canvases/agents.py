@@ -75,8 +75,8 @@ class KnowledgeArchitect(BaseAgent, CanvasPlanAndExecuteHandler):
 
     def parse_final_output(
         self, payload: Dict[str, Any], plan_output: Dict[str, Any], raw_llm_output: str
-    ) -> ConceptualGraph:
-        """Domain Transformation Hook: Maps plan and synthesis/raw outputs into ConceptualGraph."""
+    ) -> Dict[str, Any]:
+        """Domain Transformation Hook: Maps plan and synthesis/raw outputs into JSON dict."""
         try:
             parsed_data = self.output_parser.parse_json(raw_llm_output)
         except Exception:
@@ -95,13 +95,13 @@ class KnowledgeArchitect(BaseAgent, CanvasPlanAndExecuteHandler):
         source_id = source_node.get("id", "unknown") if isinstance(source_node, dict) else getattr(source_node, "id", "unknown")
 
         logger.info(
-            "decomposition_completed",
+            "knowledge_architect_output_parsed",
             source_node_id=source_id,
-            sub_nodes_count=len(sub_nodes),
-            causal_links_count=len(causal_links),
+            nodes_count=len(sub_nodes),
+            edges_count=len(causal_links),
         )
 
-        return result
+        return result.model_dump()
 
 
 class OntologyAuditor(BaseAgent):
