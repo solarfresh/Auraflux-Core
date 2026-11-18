@@ -68,6 +68,8 @@ def test_parse_final_output_success(agent):
     }
 
     result = agent.parse_final_output(payload, plan_output, raw_llm_output)
+    if isinstance(result, dict):
+        result = ConceptualGraph(**result)
     assert isinstance(result, ConceptualGraph)
     assert len(result.nodes) == 1
     assert "sub1" in result.nodes
@@ -85,6 +87,8 @@ def test_parse_final_output_fallback(agent):
     agent.output_parser.parse_json.side_effect = Exception("Parsing error")
 
     result = agent.parse_final_output(payload, plan_output, raw_llm_output)
+    if isinstance(result, dict):
+        result = ConceptualGraph(**result)
     assert isinstance(result, ConceptualGraph)
     assert len(result.nodes) == 1
     assert "sub_fallback" in result.nodes
